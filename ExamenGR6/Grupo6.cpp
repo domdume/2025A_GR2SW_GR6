@@ -41,7 +41,7 @@ float lastFrame = 0.0f;
 bool flashlightOn = false;
 
 // slenderman variables
-glm::vec3 slendermanPosition = glm::vec3(0.0f, -7.5f, -35.0f); // Más alto para estar completamente visible
+glm::vec3 slendermanPosition = glm::vec3(0.0f, -7.5f, -30.0f); // Posicionado dentro de la habitación
 float slendermanSpeed = 2.0f;
 float slendermanDirection = 0.0f;
 float slendermanMovementTimer = 0.0f;
@@ -132,9 +132,21 @@ int main()
         newPosition.x += moveX;
         newPosition.z += moveZ;
 
-        // Mover Slenderman libremente sin restricciones de pared
-        slendermanPosition.x = newPosition.x;
-        slendermanPosition.z = newPosition.z;
+        // Mantener Slenderman dentro de los límites de la habitación
+        // Límites basados en las dimensiones del party room
+        float roomMinX = -15.0f;
+        float roomMaxX = 15.0f;
+        float roomMinZ = -45.0f;
+        float roomMaxZ = -15.0f;
+        
+        if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
+            newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
+            slendermanPosition.x = newPosition.x;
+            slendermanPosition.z = newPosition.z;
+        } else {
+            // Si se sale de los límites, cambiar dirección
+            slendermanDirection += glm::radians(180.0f);
+        }
 
         // Mantener Slenderman siempre a la altura correcta (completamente visible sobre el piso)
         slendermanPosition.y = -7.5f;
