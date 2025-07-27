@@ -116,24 +116,44 @@ int main()
         lastFrame = currentFrame;
         processInput(window);
 
-        // Actualizar movimiento de Slenderman
+        // Actualizar movimiento de Slenderman para perseguir al jugador
         slendermanMovementTimer += deltaTime;
 
-        // Cambiar dirección cada 3-5 segundos de forma aleatoria
-        if (slendermanMovementTimer > 3.0f + (sin(currentFrame * 0.3f) * 2.0f)) {
-            slendermanDirection += glm::radians(45.0f + (sin(currentFrame * 0.7f) * 90.0f));
-            slendermanMovementTimer = 0.0f;
+        // Calcular la dirección hacia la cámara (jugador)
+        glm::vec3 directionToPlayer = camera.Position - slendermanPosition;
+        directionToPlayer.y = 0.0f; // Solo movimiento horizontal
+        
+        // Calcular la distancia al jugador
+        float distanceToPlayer = glm::length(directionToPlayer);
+        
+        // Si está muy cerca, moverse más lento para crear tensión
+        float currentSpeed = slendermanSpeed;
+        if (distanceToPlayer < 5.0f) {
+            currentSpeed = slendermanSpeed * 0.3f; // Más lento cuando está cerca
+        } else if (distanceToPlayer > 20.0f) {
+            currentSpeed = slendermanSpeed * 1.5f; // Más rápido cuando está lejos
+        }
+        
+        // Normalizar la dirección y calcular el ángulo
+        if (distanceToPlayer > 0.1f) { // Evitar división por cero
+            directionToPlayer = glm::normalize(directionToPlayer);
+            slendermanDirection = atan2(directionToPlayer.x, directionToPlayer.z);
+            
+            // Agregar un poco de movimiento errático ocasionalmente
+            if (slendermanMovementTimer > 2.0f + (sin(currentFrame * 0.5f) * 1.0f)) {
+                slendermanDirection += glm::radians((sin(currentFrame * 1.2f) * 30.0f)); // Movimiento errático sutil
+                slendermanMovementTimer = 0.0f;
+            }
         }
 
         // Calcular nueva posición de Slenderman
-        float moveX = sin(slendermanDirection) * slendermanSpeed * deltaTime;
-        float moveZ = cos(slendermanDirection) * slendermanSpeed * deltaTime;
+        float moveX = sin(slendermanDirection) * currentSpeed * deltaTime;
+        float moveZ = cos(slendermanDirection) * currentSpeed * deltaTime;
         glm::vec3 newPosition = slendermanPosition;
         newPosition.x += moveX;
         newPosition.z += moveZ;
 
         // Mantener Slenderman dentro de los límites de la habitación
-        // Límites basados en las dimensiones del party room
         float roomMinX = -15.0f;
         float roomMaxX = 15.0f;
         float roomMinZ = -45.0f;
@@ -143,9 +163,6 @@ int main()
             newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
             slendermanPosition.x = newPosition.x;
             slendermanPosition.z = newPosition.z;
-        } else {
-            // Si se sale de los límites, cambiar dirección
-            slendermanDirection += glm::radians(180.0f);
         }
 
         // Mantener Slenderman siempre a la altura correcta (completamente visible sobre el piso)
@@ -200,7 +217,15 @@ int main()
         // Renderizar Slenderman
         glm::mat4 slendermanModelMatrix = glm::mat4(1.0f);
         slendermanModelMatrix = glm::translate(slendermanModelMatrix, slendermanPosition);
-        slendermanModelMatrix = glm::rotate(slendermanModelMatrix, slendermanDirection, glm::vec3(0.0f, 1.0f, 0.0f));
+        
+        // Hacer que Slenderman siempre mire hacia el jugador
+        glm::vec3 lookDirection = camera.Position - slendermanPosition;
+        lookDirection.y = 0.0f; // Solo rotación horizontal
+        if (glm::length(lookDirection) > 0.1f) {
+            float lookAngle = atan2(lookDirection.x, lookDirection.z);
+            slendermanModelMatrix = glm::rotate(slendermanModelMatrix, lookAngle, glm::vec3(0.0f, 1.0f, 0.0f));
+        }
+        
         slendermanModelMatrix = glm::scale(slendermanModelMatrix, glm::vec3(0.005f, 0.005f, 0.005f)); // Mucho más pequeño, tamaño humano
         ourShader.setMat4("model", slendermanModelMatrix);
         slendermanModel.Draw(ourShader);
