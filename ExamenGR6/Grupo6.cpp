@@ -86,7 +86,7 @@ int main()
     // load models
     // -----------
     //Model ourModel(FileSystem::getPath("resources/objects/backpack/backpack.obj"));
-    Model ourModel("C:/Users/DomingaCF/Documents/Visual Studio 2022/ExamenGR6/ExamenGR6/model/partyroom/partyroom.obj");
+    Model ourModel("model/partyroom/partyroom.obj");
     //Model ourModel("model/backpack/backpack.obj");
 
 
