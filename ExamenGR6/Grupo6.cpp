@@ -28,7 +28,8 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, -7.5f, -32.0f)); // Posición dentro de la habitación
+Camera camera(glm::vec3(0.0f, -7.5f, -32.0f)); 
+// Posición dentro de la habitación
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -99,7 +100,8 @@ int main()
     // load models
     // -----------
     Model ourModel("model/partyroom/partyroom.obj");
-    Model slendermanModel("model/slenderman/slenderman/slenderman.obj");
+    Model slendermanModel("model/slenderman/slenderman.obj");
+    Model armaModel("model/arma/arma1.obj");
 
 
     // draw in wireframe
@@ -192,6 +194,23 @@ int main()
         slendermanModelMatrix = glm::scale(slendermanModelMatrix, glm::vec3(0.005f, 0.005f, 0.005f)); // Mucho más pequeño, tamaño humano
         ourShader.setMat4("model", slendermanModelMatrix);
         slendermanModel.Draw(ourShader);
+        
+        // Renderizar el arma en el suelo del escenario
+        glm::mat4 armaModelMatrix = glm::mat4(1.0f);
+        
+        // Posición fija del arma en el suelo
+        glm::vec3 armaPosition = glm::vec3(-2.0f, -9.8f, -33.0f); // En el suelo, cerca del centro
+        armaModelMatrix = glm::translate(armaModelMatrix, armaPosition);
+        
+        // Rotar el arma para que se vea natural en el suelo
+        armaModelMatrix = glm::rotate(armaModelMatrix, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // Rotación en Y
+        armaModelMatrix = glm::rotate(armaModelMatrix, glm::radians(10.0f), glm::vec3(1.0f, 0.0f, 0.0f));  // Leve inclinación
+        
+        // Escala apropiada para que se vea bien en el suelo
+        armaModelMatrix = glm::scale(armaModelMatrix, glm::vec3(0.015f, 0.015f, 0.015f));
+        
+        ourShader.setMat4("model", armaModelMatrix);
+        armaModel.Draw(ourShader);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
