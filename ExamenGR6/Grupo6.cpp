@@ -10,6 +10,8 @@
 #include <learnopengl/model.h>
 
 #include <iostream>
+#include <cmath>
+#include <cstdlib>
 
 #define STB_IMAGE_IMPLEMENTATION 
 #include <learnopengl/stb_image.h>
@@ -18,6 +20,7 @@
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void processInput(GLFWwindow* window);
 
 // settings
@@ -25,7 +28,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, -7.5f, 3.0f));
+Camera camera(glm::vec3(0.0f, -7.5f, -32.0f)); // Posición dentro de la habitación
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -33,6 +36,15 @@ bool firstMouse = true;
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
+
+// flashlight
+bool flashlightOn = false;
+
+// slenderman variables
+glm::vec3 slendermanPosition = glm::vec3(0.0f, -7.5f, -35.0f); // Más alto para estar completamente visible
+float slendermanSpeed = 2.0f;
+float slendermanDirection = 0.0f;
+float slendermanMovementTimer = 0.0f;
 
 int main()
 {
@@ -60,6 +72,7 @@ int main()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     // tell GLFW to capture our mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -85,9 +98,8 @@ int main()
     //Shader emissiveShader("shaders/luzemissive.vs", "shaders/luzemissive.fs");
     // load models
     // -----------
-    //Model ourModel(FileSystem::getPath("resources/objects/backpack/backpack.obj"));
-    Model ourModel("C:/Users/DomingaCF/Documents/Visual Studio 2022/ExamenGR6/ExamenGR6/model/partyroom/partyroom.obj");
-    //Model ourModel("model/backpack/backpack.obj");
+    Model ourModel("model/partyroom/partyroom.obj");
+    Model slendermanModel("model/slenderman/slenderman/slenderman.obj");
 
 
     // draw in wireframe
@@ -104,7 +116,30 @@ int main()
         lastFrame = currentFrame;
         processInput(window);
 
-		camera.Position.y = -7.5f; // Mantener la c�mara a una altura fija
+        // Actualizar movimiento de Slenderman
+        slendermanMovementTimer += deltaTime;
+        
+        // Cambiar dirección cada 3-5 segundos de forma aleatoria
+        if (slendermanMovementTimer > 3.0f + (sin(currentFrame * 0.3f) * 2.0f)) {
+            slendermanDirection += glm::radians(45.0f + (sin(currentFrame * 0.7f) * 90.0f));
+            slendermanMovementTimer = 0.0f;
+        }
+        
+        // Calcular nueva posición de Slenderman
+        float moveX = sin(slendermanDirection) * slendermanSpeed * deltaTime;
+        float moveZ = cos(slendermanDirection) * slendermanSpeed * deltaTime;
+        glm::vec3 newPosition = slendermanPosition;
+        newPosition.x += moveX;
+        newPosition.z += moveZ;
+        
+        // Mover Slenderman libremente sin restricciones de pared
+        slendermanPosition.x = newPosition.x;
+        slendermanPosition.z = newPosition.z;
+        
+        // Mantener Slenderman siempre a la altura correcta (completamente visible sobre el piso)
+        slendermanPosition.y = -7.5f;
+
+		camera.Position.y = -7.5f; // Mantener la cámara a una altura fija
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -113,24 +148,50 @@ int main()
         // Configura todos los uniforms
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 200.0f);
         glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, -10.0f, -30.0f));
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
-        ourShader.setMat4("model", model);
         ourShader.setVec3("viewPos", camera.Position);
-        ourShader.setFloat("material.shininess", 32.0f);
+        ourShader.setFloat("material.shininess", 16.0f);
+        
+        // Luz principal tenue para ambiente de discoteca
         ourShader.setVec3("light.position", 0.0f, 5.0f, -15.0f);
-        ourShader.setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
-        ourShader.setVec3("light.diffuse", 1.0f, 1.0f, 1.0f);
-        ourShader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
+        ourShader.setVec3("light.ambient", 0.05f, 0.05f, 0.1f);  // Muy tenue y azulado
+        ourShader.setVec3("light.diffuse", 0.4f, 0.2f, 0.6f);    // Púrpura para ambiente disco
+        ourShader.setVec3("light.specular", 0.6f, 0.4f, 0.8f);
         ourShader.setFloat("light.constant", 1.0f);
-        ourShader.setFloat("light.linear", 0.022f);
-        ourShader.setFloat("light.quadratic", 0.0019f);
+        ourShader.setFloat("light.linear", 0.045f);
+        ourShader.setFloat("light.quadratic", 0.0075f);
+        
+        // Configuración de la linterna (más brillante para contraste)
+        ourShader.setBool("flashlightOn", flashlightOn);
+        if (flashlightOn) {
+            ourShader.setVec3("flashlight.position", camera.Position);
+            ourShader.setVec3("flashlight.direction", camera.Front);
+            ourShader.setFloat("flashlight.cutOff", glm::cos(glm::radians(15.0f)));
+            ourShader.setFloat("flashlight.outerCutOff", glm::cos(glm::radians(25.0f)));
+            ourShader.setVec3("flashlight.ambient", 0.0f, 0.0f, 0.0f);
+            ourShader.setVec3("flashlight.diffuse", 1.0f, 1.0f, 0.9f);  // Luz cálida
+            ourShader.setVec3("flashlight.specular", 1.0f, 1.0f, 1.0f);
+            ourShader.setFloat("flashlight.constant", 1.0f);
+            ourShader.setFloat("flashlight.linear", 0.022f);
+            ourShader.setFloat("flashlight.quadratic", 0.0019f);
+        }
+        
         ourShader.setFloat("time", currentFrame);
 
-        // Una sola llamada para dibujar todo
+        // Renderizar el escenario principal
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(0.0f, -10.0f, -30.0f));
+        ourShader.setMat4("model", model);
         ourModel.Draw(ourShader);
+        
+        // Renderizar Slenderman
+        glm::mat4 slendermanModelMatrix = glm::mat4(1.0f);
+        slendermanModelMatrix = glm::translate(slendermanModelMatrix, slendermanPosition);
+        slendermanModelMatrix = glm::rotate(slendermanModelMatrix, slendermanDirection, glm::vec3(0.0f, 1.0f, 0.0f));
+        slendermanModelMatrix = glm::scale(slendermanModelMatrix, glm::vec3(0.005f, 0.005f, 0.005f)); // Mucho más pequeño, tamaño humano
+        ourShader.setMat4("model", slendermanModelMatrix);
+        slendermanModel.Draw(ourShader);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -158,6 +219,16 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+    
+    // Alternar linterna con tecla F
+    static bool fKeyPressed = false;
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !fKeyPressed) {
+        flashlightOn = !flashlightOn;
+        fKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE) {
+        fKeyPressed = false;
+    }
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -194,4 +265,13 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.ProcessMouseScroll(yoffset);
+}
+
+// glfw: whenever a mouse button is pressed/released, this callback is called
+// --------------------------------------------------------------------------
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        flashlightOn = !flashlightOn;
+    }
 }
