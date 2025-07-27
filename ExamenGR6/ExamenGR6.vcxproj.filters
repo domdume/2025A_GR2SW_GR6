@@ -24,7 +24,7 @@
     <ClCompile Include="..\OpenGL_Stuff\Library\glad.c">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
-    <ClCompile Include="C3_Exercise_15_LCaster_Task5.cpp">
+    <ClCompile Include="Grupo6.cpp">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
   </ItemGroup>
@@ -46,10 +46,10 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\shader_exercise15t5_casters.fs">
+    <None Include="shaders\shader.fs">
       <Filter>Archivos de origen\shaders</Filter>
     </None>
-    <None Include="shaders\shader_exercise15t5_casters.vs">
+    <None Include="shaders\shader.vs">
       <Filter>Archivos de origen\shaders</Filter>
     </None>
   </ItemGroup>
