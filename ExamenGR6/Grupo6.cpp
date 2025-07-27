@@ -45,6 +45,7 @@ glm::vec3 slendermanPosition = glm::vec3(0.0f, -7.5f, -30.0f); // Posicionado de
 float slendermanSpeed = 2.0f;
 float slendermanDirection = 0.0f;
 float slendermanMovementTimer = 0.0f;
+bool slendermanIsIlluminated = false; // Estado de iluminación de Slenderman
 
 int main()
 {
@@ -120,51 +121,75 @@ int main()
         // Actualizar movimiento de Slenderman para perseguir al jugador
         slendermanMovementTimer += deltaTime;
 
-        // Calcular la dirección hacia la cámara (jugador)
-        glm::vec3 directionToPlayer = camera.Position - slendermanPosition;
-        directionToPlayer.y = 0.0f; // Solo movimiento horizontal
-        
-        // Calcular la distancia al jugador
-        float distanceToPlayer = glm::length(directionToPlayer);
-        
-        // Si está muy cerca, moverse más lento para crear tensión
-        float currentSpeed = slendermanSpeed;
-        if (distanceToPlayer < 5.0f) {
-            currentSpeed = slendermanSpeed * 0.3f; // Más lento cuando está cerca
-        } else if (distanceToPlayer > 20.0f) {
-            currentSpeed = slendermanSpeed * 1.5f; // Más rápido cuando está lejos
-        }
-        
-        // Normalizar la dirección y calcular el ángulo
-        if (distanceToPlayer > 0.1f) { // Evitar división por cero
-            directionToPlayer = glm::normalize(directionToPlayer);
-            slendermanDirection = atan2(directionToPlayer.x, directionToPlayer.z);
+        // Calcular si Slenderman está siendo iluminado por la linterna
+        slendermanIsIlluminated = false;
+        if (flashlightOn) {
+            // Calcular vector de la cámara hacia Slenderman
+            glm::vec3 directionToSlenderman = glm::normalize(slendermanPosition - camera.Position);
             
-            // Agregar un poco de movimiento errático ocasionalmente
-            if (slendermanMovementTimer > 2.0f + (sin(currentFrame * 0.5f) * 1.0f)) {
-                slendermanDirection += glm::radians((sin(currentFrame * 1.2f) * 30.0f)); // Movimiento errático sutil
-                slendermanMovementTimer = 0.0f;
+            // Calcular el ángulo entre la dirección de la cámara y la dirección hacia Slenderman
+            float dotProduct = glm::dot(camera.Front, directionToSlenderman);
+            float angleCos = dotProduct;
+            
+            // Verificar si Slenderman está dentro del cono de la linterna
+            float flashlightAngle = glm::cos(glm::radians(25.0f)); // Ángulo exterior de la linterna
+            float distanceToSlenderman = glm::length(slendermanPosition - camera.Position);
+            
+            // Slenderman está iluminado si está dentro del cono y a una distancia razonable
+            if (angleCos > flashlightAngle && distanceToSlenderman < 50.0f) {
+                slendermanIsIlluminated = true;
             }
         }
 
-        // Calcular nueva posición de Slenderman
-        float moveX = sin(slendermanDirection) * currentSpeed * deltaTime;
-        float moveZ = cos(slendermanDirection) * currentSpeed * deltaTime;
-        glm::vec3 newPosition = slendermanPosition;
-        newPosition.x += moveX;
-        newPosition.z += moveZ;
+        // Solo perseguir si NO está siendo iluminado
+        if (!slendermanIsIlluminated) {
+            // Calcular la dirección hacia la cámara (jugador)
+            glm::vec3 directionToPlayer = camera.Position - slendermanPosition;
+            directionToPlayer.y = 0.0f; // Solo movimiento horizontal
+            
+            // Calcular la distancia al jugador
+            float distanceToPlayer = glm::length(directionToPlayer);
+            
+            // Si está muy cerca, moverse más lento para crear tensión
+            float currentSpeed = slendermanSpeed;
+            if (distanceToPlayer < 5.0f) {
+                currentSpeed = slendermanSpeed * 0.3f; // Más lento cuando está cerca
+            } else if (distanceToPlayer > 20.0f) {
+                currentSpeed = slendermanSpeed * 1.5f; // Más rápido cuando está lejos
+            }
+            
+            // Normalizar la dirección y calcular el ángulo
+            if (distanceToPlayer > 0.1f) { // Evitar división por cero
+                directionToPlayer = glm::normalize(directionToPlayer);
+                slendermanDirection = atan2(directionToPlayer.x, directionToPlayer.z);
+                
+                // Agregar un poco de movimiento errático ocasionalmente
+                if (slendermanMovementTimer > 2.0f + (sin(currentFrame * 0.5f) * 1.0f)) {
+                    slendermanDirection += glm::radians((sin(currentFrame * 1.2f) * 30.0f)); // Movimiento errático sutil
+                    slendermanMovementTimer = 0.0f;
+                }
+            }
 
-        // Mantener Slenderman dentro de los límites de la habitación
-        float roomMinX = -15.0f;
-        float roomMaxX = 15.0f;
-        float roomMinZ = -45.0f;
-        float roomMaxZ = -15.0f;
-        
-        if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
-            newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
-            slendermanPosition.x = newPosition.x;
-            slendermanPosition.z = newPosition.z;
+            // Calcular nueva posición de Slenderman
+            float moveX = sin(slendermanDirection) * currentSpeed * deltaTime;
+            float moveZ = cos(slendermanDirection) * currentSpeed * deltaTime;
+            glm::vec3 newPosition = slendermanPosition;
+            newPosition.x += moveX;
+            newPosition.z += moveZ;
+
+            // Mantener Slenderman dentro de los límites de la habitación
+            float roomMinX = -15.0f;
+            float roomMaxX = 15.0f;
+            float roomMinZ = -45.0f;
+            float roomMaxZ = -15.0f;
+            
+            if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
+                newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
+                slendermanPosition.x = newPosition.x;
+                slendermanPosition.z = newPosition.z;
+            }
         }
+        // Si está iluminado, Slenderman se queda inmóvil (no actualizar posición)
 
         // Mantener Slenderman siempre a la altura correcta (completamente visible sobre el piso)
         slendermanPosition.y = -7.5f;
@@ -224,6 +249,7 @@ int main()
         slendermanShader.setVec3("viewPos", camera.Position);
         slendermanShader.setVec3("lightPos", camera.Position); // La luz sigue al jugador para efectos dramáticos
         slendermanShader.setFloat("time", currentFrame);
+        slendermanShader.setBool("isIlluminated", slendermanIsIlluminated); // Estado de iluminación
         
         glm::mat4 slendermanModelMatrix = glm::mat4(1.0f);
         slendermanModelMatrix = glm::translate(slendermanModelMatrix, slendermanPosition);
