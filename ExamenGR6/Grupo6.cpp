@@ -10,10 +10,11 @@
 #include <learnopengl/model.h>
 
 #include <iostream>
+#include <cstdlib>
+#include <ctime>
 
 #define STB_IMAGE_IMPLEMENTATION 
 #include <learnopengl/stb_image.h>
-
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -34,10 +35,17 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
+// slenderman movement
+glm::vec3 slendermanPos(0.0f, -10.0f, -30.0f);
+float slendermanSpeed = 10.0f;
+float movementTimer = 0.0f;
+float directionInterval = 2.0f;
+int direction = 0; // 0=derecha, 1=izquierda, 2=arriba(z-), 3=abajo(z+)
+
 int main()
 {
-    // glfw: initialize and configure
-    // ------------------------------
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -47,9 +55,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    // glfw window creation
-    // --------------------
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Exercise 16 Task 3", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Slenderman Party Room", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -60,64 +66,63 @@ int main()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
-
-    // tell GLFW to capture our mouse
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // glad: load all OpenGL function pointers
-    // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
 
-    // tell stb_image.h to flip loaded texture's on the y-axis (before loading model).
-   //stbi_set_flip_vertically_on_load(true);
-
-    // configure global opengl state
-    // -----------------------------
     glEnable(GL_DEPTH_TEST);
 
-    // build and compile shaders
-    // -------------------------
     Shader ourShader("shaders/shader.vs", "shaders/shader.fs");
-    //Shader emissiveShader("shaders/luzemissive.vs", "shaders/luzemissive.fs");
-    // load models
-    // -----------
-    //Model ourModel(FileSystem::getPath("resources/objects/backpack/backpack.obj"));
-    Model ourModel("model/partyroom/partyroom.obj");
-    //Model ourModel("model/backpack/backpack.obj");
 
+    // Modelos
+    Model partyRoom("model/partyroom/partyroom.obj");
+    Model slenderman("model/slenderman/slenderman.obj");
 
-    // draw in wireframe
-    //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    camera.MovementSpeed = 10;
 
-    camera.MovementSpeed = 10; //Optional. Modify the speed of the camera
-
-    // render loop
-    // -----------
     while (!glfwWindowShouldClose(window))
     {
         float currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
+
         processInput(window);
 
-		camera.Position.y = -7.5f; // Mantener la cámara a una altura fija
+        // Mantener la cámara en altura constante
+        camera.Position.y = -7.5f;
+
+        // Movimiento automático del modelo Slenderman
+        movementTimer += deltaTime;
+        if (movementTimer > directionInterval) {
+            direction = (direction + 1) % 4;
+            movementTimer = 0.0f;
+        }
+
+        float moveAmount = slendermanSpeed * deltaTime;
+        switch (direction) {
+        case 0: slendermanPos.x += moveAmount; break;
+        case 1: slendermanPos.x -= moveAmount; break;
+        case 2: slendermanPos.z -= moveAmount; break;
+        case 3: slendermanPos.z += moveAmount; break;
+        }
+
+        if (slendermanPos.x > 50.0f) slendermanPos.x = -50.0f;
+        if (slendermanPos.x < -50.0f) slendermanPos.x = 50.0f;
+        if (slendermanPos.z > 50.0f) slendermanPos.z = -50.0f;
+        if (slendermanPos.z < -50.0f) slendermanPos.z = 50.0f;
+
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         ourShader.use();
-
-        // Configura todos los uniforms
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 200.0f);
         glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, -10.0f, -30.0f));
         ourShader.setMat4("projection", projection);
         ourShader.setMat4("view", view);
-        ourShader.setMat4("model", model);
         ourShader.setVec3("viewPos", camera.Position);
         ourShader.setFloat("material.shininess", 32.0f);
         ourShader.setVec3("light.position", 0.0f, 5.0f, -15.0f);
@@ -129,22 +134,27 @@ int main()
         ourShader.setFloat("light.quadratic", 0.0019f);
         ourShader.setFloat("time", currentFrame);
 
-        // Una sola llamada para dibujar todo
-        ourModel.Draw(ourShader);
+        // Dibujar escenario
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(0.0f, -10.0f, -30.0f)); // ubicación fija del partyroom
+        ourShader.setMat4("model", model);
+        partyRoom.Draw(ourShader);
+
+        // Dibujar Slenderman
+        glm::mat4 slendermanModel = glm::mat4(1.0f);
+        slendermanModel = glm::translate(slendermanModel, slendermanPos);
+        slendermanModel = glm::scale(slendermanModel, glm::vec3(0.1f));
+        ourShader.setMat4("model", slendermanModel);
+        slenderman.Draw(ourShader);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // glfw: terminate, clearing all previously allocated GLFW resources.
-    // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
 }
 
-
-// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
-// ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -160,17 +170,11 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
-// glfw: whenever the window size changed (by OS or user resize) this callback function executes
-// ---------------------------------------------------------------------------------------------
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    // make sure the viewport matches the new window dimensions; note that width and 
-    // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
 
-// glfw: whenever the mouse moves, this callback is called
-// -------------------------------------------------------
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
     if (firstMouse)
@@ -181,7 +185,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     }
 
     float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+    float yoffset = lastY - ypos;
 
     lastX = xpos;
     lastY = ypos;
@@ -189,8 +193,6 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
-// glfw: whenever the mouse scroll wheel scrolls, this callback is called
-// ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.ProcessMouseScroll(yoffset);
