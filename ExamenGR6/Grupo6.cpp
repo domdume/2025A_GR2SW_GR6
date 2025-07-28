@@ -15,6 +15,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION 
 #include <learnopengl/stb_image.h>
+#include <vector>
 
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -22,6 +23,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void processInput(GLFWwindow* window);
+bool isPlayerInAllowedZone(glm::vec3 position, const std::vector<glm::vec4>& zones);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -32,6 +34,26 @@ Camera camera(glm::vec3(0.0f, -7.5f, -32.0f)); // Posición dentro de la habitac
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
+std::vector<glm::vec4> walkableZones = {
+    // Zona 1: La discoteca principal (un rectángulo grande)
+    glm::vec4(-12.05f, 3.8f, -59.07f, -19.08f),  // minX, maxX, minZ, maxZ
+    // Zona 2: Primer segmento del pasillo
+    glm::vec4(3.77f, 4.53f, -50.08f, -48.96f),
+    glm::vec4(4.52f, 12.25f, -51.10f, -46.88f),
+    // Zona 3: Segundo segmento del pasillo (ejemplo si dobla a la izquierda)
+    glm::vec4(9.06f, 11.70f, -47.15f, -43.56f),
+    glm::vec4(11.52f, 15.73f, -46.01f, -43.4f),
+    glm::vec4(13.14f, 15.73f, -43.4f, -41.90f),
+    glm::vec4(5.18f, 15.74f, -43.2f, -34.72f),
+	// Zona 4: Tercer segmento del pasillo (ejemplo si dobla a la derecha)
+    glm::vec4(9.35f, 12.14f, -54.13f, -51.47f),
+    glm::vec4(9.43f, 11.89f, -51.92f, -50.70f),
+    glm::vec4(11.84f, 15.92f, -54.13f, -51.47f),
+    glm::vec4(13.48f, 15.94f, -55.23f, -53.70f),
+    glm::vec4(5.05f, 15.81f, -60.53f, -55.18f),
+    glm::vec4(5.05f, 7.26f, -55.53f, -55.83f)
+    
+};
 
 // timing
 float deltaTime = 0.0f;
@@ -136,15 +158,8 @@ int main()
 
         // Mantener Slenderman dentro de los límites de la habitación
         // Límites basados en las dimensiones del party room
-        float roomMinX = -15.0f;
-        float roomMaxX = 15.0f;
-        float roomMinZ = -45.0f;
-        float roomMaxZ = -15.0f;
-        
-        if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
-            newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
-            slendermanPosition.x = newPosition.x;
-            slendermanPosition.z = newPosition.z;
+        if (isPlayerInAllowedZone(newPosition, walkableZones)) {
+			slendermanPosition = newPosition; // Actualizar posición solo si está dentro de las zonas permitidas
         } else {
             // Si se sale de los límites, cambiar dirección
             slendermanDirection += glm::radians(180.0f);
@@ -236,6 +251,18 @@ int main()
     return 0;
 }
 
+bool isPlayerInAllowedZone(glm::vec3 position, const std::vector<glm::vec4>& zones) {
+    for (const auto& zone : zones) {
+        // Comprueba si la posición está dentro de los límites de la zona actual
+        bool inThisZone = (position.x >= zone.x && position.x <= zone.y &&
+            position.z >= zone.z && position.z <= zone.w);
+        // Si está dentro de al menos UNA zona, es un lugar válido.
+        if (inThisZone) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
@@ -243,6 +270,8 @@ void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    glm::vec3 oldCameraPos = camera.Position;
 
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera.ProcessKeyboard(FORWARD, deltaTime);
@@ -252,7 +281,11 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
-
+    if (!isPlayerInAllowedZone(camera.Position, walkableZones))
+    {
+        // Si se sale, revierte a la posición segura anterior
+        camera.Position = oldCameraPos;
+    }
     // Alternar linterna con tecla F
     static bool fKeyPressed = false;
     if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !fKeyPressed) {
