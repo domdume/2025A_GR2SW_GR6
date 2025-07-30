@@ -29,23 +29,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="textures\awesomeface.png">
-      <Filter>Archivos de origen\textures</Filter>
-    </Image>
-    <Image Include="textures\container.jpg">
-      <Filter>Archivos de origen\textures</Filter>
-    </Image>
-    <Image Include="textures\container2.png">
-      <Filter>Archivos de origen\textures</Filter>
-    </Image>
-    <Image Include="textures\container2_specular.png">
-      <Filter>Archivos de origen\textures</Filter>
-    </Image>
-    <Image Include="textures\matrix.jpg">
-      <Filter>Archivos de origen\textures</Filter>
-    </Image>
-  </ItemGroup>
-  <ItemGroup>
     <None Include="shaders\shader.fs">
       <Filter>Archivos de origen\shaders</Filter>
     </None>
