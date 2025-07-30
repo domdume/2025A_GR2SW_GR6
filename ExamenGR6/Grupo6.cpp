@@ -88,6 +88,11 @@ float lastDamageTime = 0.0f; // Para evitar pérdida múltiple de vidas muy ráp
 const float damageInterval = 2.0f; // Tiempo mínimo entre daños (segundos)
 const float dangerDistance = 3.0f; // Distancia a la que Slenderman causa daño
 
+// victory system
+bool playerWins = false;
+bool showVictoryScreen = false;
+int totalSkulls = 7; // Total de calaveras en el juego
+
 // slenderman variables
 glm::vec3 slendermanPosition = glm::vec3(0.0f, -7.5f, -30.0f); // Posicionado dentro de la habitación
 float slendermanSpeed = 2.0f;
@@ -98,6 +103,7 @@ bool slendermanIsIlluminated = false; // Estado de iluminación de Slenderman
 // Game Over overlay variables
 unsigned int gameOverVAO, gameOverVBO;
 unsigned int gameOverTexture;
+unsigned int victoryTexture;
 
 int main()
 {
@@ -209,8 +215,10 @@ int main()
     setupGameOverQuad();
     
     // Cargar textura de Game Over 
-    
     gameOverTexture = loadTexture("textures/over.png"); 
+    
+    // Cargar textura de Victory
+    victoryTexture = loadTexture("textures/win.png"); 
     
 
 
@@ -239,10 +247,12 @@ int main()
         }
 
         // Verificar colisiones con calaveras para recargar batería
-        checkSkullCollisions(camera.Position);
+        if (!gameOver && !playerWins) {
+            checkSkullCollisions(camera.Position);
+        }
 
         // Verificar si Slenderman causa daño al jugador
-        if (!gameOver) {
+        if (!gameOver && !playerWins) {
             checkSlendermanDamage(camera.Position, slendermanPosition, currentFrame);
         }
 
@@ -260,88 +270,92 @@ int main()
             lastLifeDisplay = currentFrame;
         }
 
-        // Actualizar movimiento de Slenderman para perseguir al jugador
-        slendermanMovementTimer += deltaTime;
+        // Actualizar movimiento de Slenderman solo si el juego sigue activo
+        if (!gameOver && !playerWins) {
+            slendermanMovementTimer += deltaTime;
 
-        // Calcular si Slenderman está siendo iluminado por la linternas
-        slendermanIsIlluminated = false;
-        if (flashlightOn && flashlightBattery > 0.0f) {
-            // Calcular vector de la cámara hacia Slenderman
-            glm::vec3 directionToSlenderman = glm::normalize(slendermanPosition - camera.Position);
+            // Calcular si Slenderman está siendo iluminado por la linternas
+            slendermanIsIlluminated = false;
+            if (flashlightOn && flashlightBattery > 0.0f) {
+                // Calcular vector de la cámara hacia Slenderman
+                glm::vec3 directionToSlenderman = glm::normalize(slendermanPosition - camera.Position);
 
-            // Calcular el ángulo entre la dirección de la cámara y la dirección hacia Slenderman
-            float dotProduct = glm::dot(camera.Front, directionToSlenderman);
-            float angleCos = dotProduct;
+                // Calcular el ángulo entre la dirección de la cámara y la dirección hacia Slenderman
+                float dotProduct = glm::dot(camera.Front, directionToSlenderman);
+                float angleCos = dotProduct;
 
-            // Verificar si Slenderman está dentro del cono de la linterna
-            float flashlightAngle = glm::cos(glm::radians(25.0f)); // Ángulo exterior de la linterna
-            float distanceToSlenderman = glm::length(slendermanPosition - camera.Position);
+                // Verificar si Slenderman está dentro del cono de la linterna
+                float flashlightAngle = glm::cos(glm::radians(25.0f)); // Ángulo exterior de la linterna
+                float distanceToSlenderman = glm::length(slendermanPosition - camera.Position);
 
-            // Slenderman está iluminado si está dentro del cono y a una distancia razonable
-            if (angleCos > flashlightAngle && distanceToSlenderman < 50.0f) {
-                slendermanIsIlluminated = true;
-            }
-        }
-
-        // Solo perseguir si NO está siendo iluminado
-        if (!slendermanIsIlluminated) {
-            // Calcular la dirección hacia la cámara (jugador)
-            glm::vec3 directionToPlayer = camera.Position - slendermanPosition;
-            directionToPlayer.y = 0.0f; // Solo movimiento horizontal
-
-            // Calcular la distancia al jugador
-            float distanceToPlayer = glm::length(directionToPlayer);
-
-            // Si está muy cerca, moverse más lento para crear tensión
-            float currentSpeed = slendermanSpeed;
-            if (distanceToPlayer < 5.0f) {
-                currentSpeed = slendermanSpeed * 0.3f; // Más lento cuando está cerca
-            }
-            else if (distanceToPlayer > 20.0f) {
-                currentSpeed = slendermanSpeed * 1.5f; // Más rápido cuando está lejos
-            }
-
-            // Normalizar la dirección y calcular el ángulo
-            if (distanceToPlayer > 0.1f) { // Evitar división por cero
-                directionToPlayer = glm::normalize(directionToPlayer);
-                slendermanDirection = atan2(directionToPlayer.x, directionToPlayer.z);
-
-                // Agregar un poco de movimiento errático ocasionalmente
-                if (slendermanMovementTimer > 2.0f + (sin(currentFrame * 0.5f) * 1.0f)) {
-                    slendermanDirection += glm::radians((sin(currentFrame * 1.2f) * 30.0f)); // Movimiento errático sutil
-                    slendermanMovementTimer = 0.0f;
+                // Slenderman está iluminado si está dentro del cono y a una distancia razonable
+                if (angleCos > flashlightAngle && distanceToSlenderman < 50.0f) {
+                    slendermanIsIlluminated = true;
                 }
             }
 
-            // Calcular nueva posición de Slenderman
-            float moveX = sin(slendermanDirection) * currentSpeed * deltaTime;
-            float moveZ = cos(slendermanDirection) * currentSpeed * deltaTime;
-            glm::vec3 newPosition = slendermanPosition;
-            newPosition.x += moveX;
-            newPosition.z += moveZ;
+            // Solo perseguir si NO está siendo iluminado
+            if (!slendermanIsIlluminated) {
+                // Calcular la dirección hacia la cámara (jugador)
+                glm::vec3 directionToPlayer = camera.Position - slendermanPosition;
+                directionToPlayer.y = 0.0f; // Solo movimiento horizontal
 
-            // Mantener Slenderman dentro de los límites de la habitación
-            float roomMinX = -15.0f;
-            float roomMaxX = 15.0f;
-            float roomMinZ = -45.0f;
-            float roomMaxZ = -15.0f;
+                // Calcular la distancia al jugador
+                float distanceToPlayer = glm::length(directionToPlayer);
 
-            if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
-                newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
-                slendermanPosition.x = newPosition.x;
-                slendermanPosition.z = newPosition.z;
+                // Si está muy cerca, moverse más lento para crear tensión
+                float currentSpeed = slendermanSpeed;
+                if (distanceToPlayer < 5.0f) {
+                    currentSpeed = slendermanSpeed * 0.3f; // Más lento cuando está cerca
+                }
+                else if (distanceToPlayer > 20.0f) {
+                    currentSpeed = slendermanSpeed * 1.5f; // Más rápido cuando está lejos
+                }
+
+                // Normalizar la dirección y calcular el ángulo
+                if (distanceToPlayer > 0.1f) { // Evitar división por cero
+                    directionToPlayer = glm::normalize(directionToPlayer);
+                    slendermanDirection = atan2(directionToPlayer.x, directionToPlayer.z);
+
+                    // Agregar un poco de movimiento errático ocasionalmente
+                    if (slendermanMovementTimer > 2.0f + (sin(currentFrame * 0.5f) * 1.0f)) {
+                        slendermanDirection += glm::radians((sin(currentFrame * 1.2f) * 30.0f)); // Movimiento errático sutil
+                        slendermanMovementTimer = 0.0f;
+                    }
+                }
+
+                // Calcular nueva posición de Slenderman
+                float moveX = sin(slendermanDirection) * currentSpeed * deltaTime;
+                float moveZ = cos(slendermanDirection) * currentSpeed * deltaTime;
+                glm::vec3 newPosition = slendermanPosition;
+                newPosition.x += moveX;
+                newPosition.z += moveZ;
+
+                // Mantener Slenderman dentro de los límites de la habitación
+                float roomMinX = -15.0f;
+                float roomMaxX = 15.0f;
+                float roomMinZ = -45.0f;
+                float roomMaxZ = -15.0f;
+
+                if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
+                    newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
+                    slendermanPosition.x = newPosition.x;
+                    slendermanPosition.z = newPosition.z;
+                }
             }
+            // Si está iluminado, Slenderman se queda inmóvil (no actualizar posición)
         }
-        // Si está iluminado, Slenderman se queda inmóvil (no actualizar posición)
 
         // Mantener Slenderman siempre a la altura correcta (completamente visible sobre el piso)
         slendermanPosition.y = -7.5f;
 
         camera.Position.y = -7.5f; // Mantener la cámara a una altura fija
         
-        // Si estamos en game over, usar un fondo menos oscuro
+        // Si estamos en game over o victoria, usar fondos específicos
         if (showGameOverScreen) {
-            glClearColor(0.1f, 0.0f, 0.0f, 1.0f); // Fondo rojo muy oscuro pero no negro
+            glClearColor(0.1f, 0.0f, 0.0f, 1.0f); // Fondo rojo muy oscuro para game over
+        } else if (showVictoryScreen) {
+            glClearColor(0.0f, 0.1f, 0.0f, 1.0f); // Fondo verde muy oscuro para victoria
         } else {
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Fondo negro normal
         }
@@ -523,6 +537,111 @@ int main()
             continue;
         }
 
+        // Si estamos en pantalla de victoria, mostrar escena de celebración
+        if (showVictoryScreen) {
+            ourShader.use();
+            glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 200.0f);
+            glm::mat4 view = camera.GetViewMatrix();
+            
+            // Configurar iluminación dorada para victoria
+            float victoryTime = glfwGetTime();
+            float goldenPulse = 0.9f + 0.3f * sin(victoryTime * 1.5f);
+            
+            ourShader.setMat4("projection", projection);
+            ourShader.setMat4("view", view);
+            ourShader.setVec3("viewPos", camera.Position);
+            ourShader.setFloat("material.shininess", 32.0f);
+            
+            // Luz dorada brillante para celebración
+            ourShader.setVec3("light.position", 0.0f, 10.0f, -30.0f);
+            ourShader.setVec3("light.ambient", 0.8f * goldenPulse, 0.6f * goldenPulse, 0.1f);
+            ourShader.setVec3("light.diffuse", 1.5f * goldenPulse, 1.2f * goldenPulse, 0.3f);
+            ourShader.setVec3("light.specular", 2.0f, 1.8f, 0.5f);
+            ourShader.setFloat("light.constant", 1.0f);
+            ourShader.setFloat("light.linear", 0.022f);
+            ourShader.setFloat("light.quadratic", 0.0019f);
+            
+            // Configurar linterna para efectos adicionales
+            ourShader.setBool("flashlightOn", true);
+            ourShader.setVec3("flashlight.position", camera.Position);
+            ourShader.setVec3("flashlight.direction", camera.Front);
+            ourShader.setFloat("flashlight.cutOff", glm::cos(glm::radians(25.0f)));
+            ourShader.setFloat("flashlight.outerCutOff", glm::cos(glm::radians(35.0f)));
+            ourShader.setVec3("flashlight.ambient", 0.2f, 0.15f, 0.0f);
+            ourShader.setVec3("flashlight.diffuse", 2.0f, 1.5f, 0.3f);
+            ourShader.setVec3("flashlight.specular", 2.0f, 1.8f, 0.5f);
+            ourShader.setFloat("flashlight.constant", 1.0f);
+            ourShader.setFloat("flashlight.linear", 0.022f);
+            ourShader.setFloat("flashlight.quadratic", 0.0019f);
+            
+            ourShader.setFloat("time", victoryTime);
+            
+            // Renderizar el escenario principal con iluminación dorada
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(0.0f, -10.0f, -30.0f));
+            ourShader.setMat4("model", model);
+            ourShader.setBool("hasEmissiveMap", false);
+            ourModel.Draw(ourShader);
+            
+            // Renderizar espejos flotantes celebrando
+            for (int i = 0; i < static_cast<int>(mirrors.size()); ++i) {
+                const auto& mirror = mirrors[i];
+                mirrorShader.use();
+                mirrorShader.setMat4("projection", projection);
+                mirrorShader.setMat4("view", view);
+                mirrorShader.setVec3("viewPos", camera.Position);
+                
+                // Configurar iluminación dorada para espejos
+                mirrorShader.setBool("flashlightOn", true);
+                mirrorShader.setVec3("flashlight.position", camera.Position);
+                mirrorShader.setVec3("flashlight.direction", camera.Front);
+                mirrorShader.setFloat("flashlight.cutOff", glm::cos(glm::radians(25.0f)));
+                mirrorShader.setFloat("flashlight.outerCutOff", glm::cos(glm::radians(35.0f)));
+                mirrorShader.setVec3("flashlight.ambient", 0.2f, 0.15f, 0.0f);
+                mirrorShader.setVec3("flashlight.diffuse", 2.0f, 1.5f, 0.3f);
+                mirrorShader.setVec3("flashlight.specular", 2.0f, 1.8f, 0.5f);
+                mirrorShader.setFloat("flashlight.constant", 1.0f);
+                mirrorShader.setFloat("flashlight.linear", 0.022f);
+                mirrorShader.setFloat("flashlight.quadratic", 0.0019f);
+                
+                glm::mat4 mirrorModelMatrix = glm::mat4(1.0f);
+                
+                // Hacer que los espejos floten y giren en celebración
+                float floatHeight = 2.0f * sin(victoryTime * 2.0f + i * 0.3f);
+                glm::vec3 floatingPosition = mirror.position;
+                floatingPosition.y += floatHeight;
+                
+                mirrorModelMatrix = glm::translate(mirrorModelMatrix, floatingPosition);
+                
+                float celebrationRotation = mirror.rotation + victoryTime * 30.0f + i * 15.0f;
+                mirrorModelMatrix = glm::rotate(mirrorModelMatrix, glm::radians(celebrationRotation), glm::vec3(0.0f, 1.0f, 0.0f));
+                
+                float celebrationScale = 1.5f + 0.3f * sin(victoryTime * 3.0f + i * 0.2f);
+                mirrorModelMatrix = glm::scale(mirrorModelMatrix, glm::vec3(celebrationScale, celebrationScale, celebrationScale));
+                
+                mirrorShader.setMat4("model", mirrorModelMatrix);
+                
+                switch (mirror.modelType) {
+                case 0:
+                    mirrorModel.Draw(mirrorShader);
+                    break;
+                case 1:
+                    mirrorModel1.Draw(mirrorShader);
+                    break;
+                case 2:
+                    mirrorModel2.Draw(mirrorShader);
+                    break;
+                }
+            }
+            
+            // Renderizar overlay PNG de Victoria encima de todo
+            renderGameOverOverlay(overlayShader, victoryTexture);
+            
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+            continue;
+        }
+
         ourShader.use();
 
         // Configura todos los uniforms
@@ -599,67 +718,81 @@ int main()
         float warmFlicker = 0.8f + 0.3f * sin(currentFrame * 6.0f + 1.0f);
 
         // Skull 1 - centro de la habitación principal
-        glm::mat4 skullModelMatrix1 = glm::mat4(1.0f);
-        skullModelMatrix1 = glm::translate(skullModelMatrix1, glm::vec3(-4.0f, -9.3f, -39.0f)); // Centro de la habitación
-        skullModelMatrix1 = glm::rotate(skullModelMatrix1, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix1 = glm::scale(skullModelMatrix1, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix1);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[0]) {
+            glm::mat4 skullModelMatrix1 = glm::mat4(1.0f);
+            skullModelMatrix1 = glm::translate(skullModelMatrix1, glm::vec3(-4.0f, -9.3f, -39.0f)); // Centro de la habitación
+            skullModelMatrix1 = glm::rotate(skullModelMatrix1, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix1 = glm::scale(skullModelMatrix1, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix1);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Skull 2 - esquina izquierda de la habitación
-        glm::mat4 skullModelMatrix2 = glm::mat4(1.0f);
-        skullModelMatrix2 = glm::translate(skullModelMatrix2, glm::vec3(-10.0f, -9.3f, -45.0f)); // Esquina izquierda
-        skullModelMatrix2 = glm::rotate(skullModelMatrix2, glm::radians(120.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix2 = glm::scale(skullModelMatrix2, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix2);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[1]) {
+            glm::mat4 skullModelMatrix2 = glm::mat4(1.0f);
+            skullModelMatrix2 = glm::translate(skullModelMatrix2, glm::vec3(-10.0f, -9.3f, -45.0f)); // Esquina izquierda
+            skullModelMatrix2 = glm::rotate(skullModelMatrix2, glm::radians(120.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix2 = glm::scale(skullModelMatrix2, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix2);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Skull 3 - esquina derecha de la habitación
-        glm::mat4 skullModelMatrix3 = glm::mat4(1.0f);
-        skullModelMatrix3 = glm::translate(skullModelMatrix3, glm::vec3(2.0f, -9.3f, -50.0f)); // Esquina derecha
-        skullModelMatrix3 = glm::rotate(skullModelMatrix3, glm::radians(-60.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix3 = glm::scale(skullModelMatrix3, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix3);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[2]) {
+            glm::mat4 skullModelMatrix3 = glm::mat4(1.0f);
+            skullModelMatrix3 = glm::translate(skullModelMatrix3, glm::vec3(2.0f, -9.3f, -50.0f)); // Esquina derecha
+            skullModelMatrix3 = glm::rotate(skullModelMatrix3, glm::radians(-60.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix3 = glm::scale(skullModelMatrix3, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix3);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Skull 4 - zona central-frontal de la habitación
-        glm::mat4 skullModelMatrix4 = glm::mat4(1.0f);
-        skullModelMatrix4 = glm::translate(skullModelMatrix4, glm::vec3(-6.0f, -9.3f, -25.0f)); // Zona frontal
-        skullModelMatrix4 = glm::rotate(skullModelMatrix4, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix4 = glm::scale(skullModelMatrix4, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix4);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[3]) {
+            glm::mat4 skullModelMatrix4 = glm::mat4(1.0f);
+            skullModelMatrix4 = glm::translate(skullModelMatrix4, glm::vec3(-6.0f, -9.3f, -25.0f)); // Zona frontal
+            skullModelMatrix4 = glm::rotate(skullModelMatrix4, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix4 = glm::scale(skullModelMatrix4, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix4);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Skull 5 - zona posterior de la habitación
-        glm::mat4 skullModelMatrix5 = glm::mat4(1.0f);
-        skullModelMatrix5 = glm::translate(skullModelMatrix5, glm::vec3(1.0f, -9.3f, -55.0f)); // Zona posterior
-        skullModelMatrix5 = glm::rotate(skullModelMatrix5, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix5 = glm::scale(skullModelMatrix5, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix5);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[4]) {
+            glm::mat4 skullModelMatrix5 = glm::mat4(1.0f);
+            skullModelMatrix5 = glm::translate(skullModelMatrix5, glm::vec3(1.0f, -9.3f, -55.0f)); // Zona posterior
+            skullModelMatrix5 = glm::rotate(skullModelMatrix5, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix5 = glm::scale(skullModelMatrix5, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix5);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Skull 6 - zona lateral izquierda
-        glm::mat4 skullModelMatrix6 = glm::mat4(1.0f);
-        skullModelMatrix6 = glm::translate(skullModelMatrix6, glm::vec3(-8.0f, -9.3f, -33.0f)); // Lateral izquierda
-        skullModelMatrix6 = glm::rotate(skullModelMatrix6, glm::radians(270.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix6 = glm::scale(skullModelMatrix6, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix6);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[5]) {
+            glm::mat4 skullModelMatrix6 = glm::mat4(1.0f);
+            skullModelMatrix6 = glm::translate(skullModelMatrix6, glm::vec3(-8.0f, -9.3f, -33.0f)); // Lateral izquierda
+            skullModelMatrix6 = glm::rotate(skullModelMatrix6, glm::radians(270.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix6 = glm::scale(skullModelMatrix6, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix6);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Skull 7 - zona lateral derecha
-        glm::mat4 skullModelMatrix7 = glm::mat4(1.0f);
-        skullModelMatrix7 = glm::translate(skullModelMatrix7, glm::vec3(0.0f, -9.3f, -30.0f)); // Lateral derecha
-        skullModelMatrix7 = glm::rotate(skullModelMatrix7, glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix7 = glm::scale(skullModelMatrix7, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix7);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+        if (!skullCollected[6]) {
+            glm::mat4 skullModelMatrix7 = glm::mat4(1.0f);
+            skullModelMatrix7 = glm::translate(skullModelMatrix7, glm::vec3(0.0f, -9.3f, -30.0f)); // Lateral derecha
+            skullModelMatrix7 = glm::rotate(skullModelMatrix7, glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+            skullModelMatrix7 = glm::scale(skullModelMatrix7, glm::vec3(1.8f, 1.8f, 1.8f)); 
+            ourShader.setMat4("model", skullModelMatrix7);
+            ourShader.setBool("hasEmissiveMap", false);
+            skullModel.Draw(ourShader);
+        }
 
         // Renderizar múltiples charcos de sangre por el escenario
         // Configurar luz ambiente tenue para la sangre
@@ -829,8 +962,22 @@ void checkSkullCollisions(glm::vec3 playerPos) {
             flashlightBattery = std::min(flashlightBattery + batteryRecharge, maxBattery);
             flashlightBatteryEmpty = false;
             
+            // Contar calaveras recolectadas
+            int skullsCollected = 0;
+            for (bool collected : skullCollected) {
+                if (collected) skullsCollected++;
+            }
+            
             // Opcional: Imprimir mensaje en consola para debug
-            std::cout << "¡Calavera " << (i + 1) << " pisada! Batería recargada: " << flashlightBattery << "s" << std::endl;
+            std::cout << "¡Calavera " << (i + 1) << " pisada! Batería recargada: " << flashlightBattery << "s (" << skullsCollected << "/" << totalSkulls << ")" << std::endl;
+            
+            // Verificar condición de victoria
+            if (skullsCollected >= totalSkulls) {
+                playerWins = true;
+                showVictoryScreen = true;
+                std::cout << "¡VICTORIA! ¡Has recolectado todas las calaveras!" << std::endl;
+            }
+            
             break; // Solo una calavera por frame
         }
     }
@@ -873,6 +1020,10 @@ void resetGame() {
     showGameOverScreen = false;
     gameOverTime = 0.0f;
     lastDamageTime = 0.0f;
+    
+    // Reiniciar variables de victoria
+    playerWins = false;
+    showVictoryScreen = false;
     
     // Reiniciar batería de linterna
     flashlightBattery = 5.0f;
@@ -1127,8 +1278,21 @@ void processInput(GLFWwindow* window)
         return;
     }
 
-    // No permitir movimiento durante game over
-    if (gameOver) {
+    // Si estamos en pantalla de victoria, permitir reinicio
+    if (showVictoryScreen) {
+        static bool rKeyPressed = false;
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && !rKeyPressed) {
+            resetGame();
+            rKeyPressed = true;
+        }
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE) {
+            rKeyPressed = false;
+        }
+        return;
+    }
+
+    // No permitir movimiento durante game over o victoria
+    if (gameOver || playerWins) {
         return;
     }
 
