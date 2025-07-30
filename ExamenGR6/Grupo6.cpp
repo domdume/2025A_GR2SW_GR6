@@ -124,6 +124,8 @@ int main()
     // -----------
     Model ourModel("model/partyroom/partyroom.obj");
     Model slendermanModel("model/slenderman/slenderman.obj");
+    Model skullModel("model/skull/skull.obj");
+    Model bloodModel("model/blood/blood.obj");
 
 
     // draw in wireframe
@@ -288,6 +290,151 @@ int main()
         slendermanModelMatrix = glm::scale(slendermanModelMatrix, glm::vec3(0.005f, 0.005f, 0.005f)); // Mucho más pequeño, tamaño humano
         slendermanShader.setMat4("model", slendermanModelMatrix);
         slendermanModel.Draw(slendermanShader);
+
+        // Volver a usar el shader principal para skulls y blood
+        ourShader.use();
+
+        // Renderizar skull
+        float flickerIntensity = 0.7f + 0.4f * sin(currentFrame * 8.0f) * cos(currentFrame * 12.0f);
+        float warmFlicker = 0.8f + 0.3f * sin(currentFrame * 6.0f + 1.0f);
+
+        // Skull 1 - centro de la habitación principal
+        glm::mat4 skullModelMatrix1 = glm::mat4(1.0f);
+        skullModelMatrix1 = glm::translate(skullModelMatrix1, glm::vec3(-4.0f, -9.3f, -39.0f)); // Centro de la habitación
+        skullModelMatrix1 = glm::rotate(skullModelMatrix1, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix1 = glm::scale(skullModelMatrix1, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix1);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Skull 2 - esquina izquierda de la habitación
+        glm::mat4 skullModelMatrix2 = glm::mat4(1.0f);
+        skullModelMatrix2 = glm::translate(skullModelMatrix2, glm::vec3(-10.0f, -9.3f, -45.0f)); // Esquina izquierda
+        skullModelMatrix2 = glm::rotate(skullModelMatrix2, glm::radians(120.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix2 = glm::scale(skullModelMatrix2, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix2);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Skull 3 - esquina derecha de la habitación
+        glm::mat4 skullModelMatrix3 = glm::mat4(1.0f);
+        skullModelMatrix3 = glm::translate(skullModelMatrix3, glm::vec3(2.0f, -9.3f, -50.0f)); // Esquina derecha
+        skullModelMatrix3 = glm::rotate(skullModelMatrix3, glm::radians(-60.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix3 = glm::scale(skullModelMatrix3, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix3);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Skull 4 - zona central-frontal de la habitación
+        glm::mat4 skullModelMatrix4 = glm::mat4(1.0f);
+        skullModelMatrix4 = glm::translate(skullModelMatrix4, glm::vec3(-6.0f, -9.3f, -25.0f)); // Zona frontal
+        skullModelMatrix4 = glm::rotate(skullModelMatrix4, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix4 = glm::scale(skullModelMatrix4, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix4);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Skull 5 - zona posterior de la habitación
+        glm::mat4 skullModelMatrix5 = glm::mat4(1.0f);
+        skullModelMatrix5 = glm::translate(skullModelMatrix5, glm::vec3(1.0f, -9.3f, -55.0f)); // Zona posterior
+        skullModelMatrix5 = glm::rotate(skullModelMatrix5, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix5 = glm::scale(skullModelMatrix5, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix5);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Skull 6 - zona lateral izquierda
+        glm::mat4 skullModelMatrix6 = glm::mat4(1.0f);
+        skullModelMatrix6 = glm::translate(skullModelMatrix6, glm::vec3(-8.0f, -9.3f, -33.0f)); // Lateral izquierda
+        skullModelMatrix6 = glm::rotate(skullModelMatrix6, glm::radians(270.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix6 = glm::scale(skullModelMatrix6, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix6);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Skull 7 - zona lateral derecha
+        glm::mat4 skullModelMatrix7 = glm::mat4(1.0f);
+        skullModelMatrix7 = glm::translate(skullModelMatrix7, glm::vec3(0.0f, -9.3f, -30.0f)); // Lateral derecha
+        skullModelMatrix7 = glm::rotate(skullModelMatrix7, glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
+        skullModelMatrix7 = glm::scale(skullModelMatrix7, glm::vec3(1.8f, 1.8f, 1.8f)); 
+        ourShader.setMat4("model", skullModelMatrix7);
+        ourShader.setBool("hasEmissiveMap", false);
+        skullModel.Draw(ourShader);
+
+        // Renderizar múltiples charcos de sangre por el escenario
+        // Configurar luz ambiente tenue para la sangre
+        ourShader.setVec3("light.position", 0.0f, -5.0f, -28.0f);
+        ourShader.setVec3("light.ambient", 0.1f, 0.02f, 0.02f); // Luz rojiza tenue
+        ourShader.setVec3("light.diffuse", 0.3f, 0.05f, 0.05f);
+        ourShader.setVec3("light.specular", 0.2f, 0.02f, 0.02f);
+        ourShader.setFloat("light.constant", 1.0f);
+        ourShader.setFloat("light.linear", 0.09f);
+        ourShader.setFloat("light.quadratic", 0.032f);
+        ourShader.setBool("hasEmissiveMap", false); // La sangre no brilla
+
+        // Charco de sangre 1 - cerca del skull central
+        glm::mat4 bloodMatrix1 = glm::mat4(1.0f);
+        bloodMatrix1 = glm::translate(bloodMatrix1, glm::vec3(-2.0f, -9.2f, -40.0f)); // Cerca del skull central
+        bloodMatrix1 = glm::rotate(bloodMatrix1, glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix1 = glm::scale(bloodMatrix1, glm::vec3(0.4f, 0.1f, 0.4f)); 
+        ourShader.setMat4("model", bloodMatrix1);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 2 - esquina izquierda de la habitación
+        glm::mat4 bloodMatrix2 = glm::mat4(1.0f);
+        bloodMatrix2 = glm::translate(bloodMatrix2, glm::vec3(-8.0f, -9.2f, -47.0f)); // Esquina izquierda
+        bloodMatrix2 = glm::rotate(bloodMatrix2, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix2 = glm::scale(bloodMatrix2, glm::vec3(0.3f, 0.1f, 0.5f)); 
+        ourShader.setMat4("model", bloodMatrix2);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 3 - cerca del área derecha
+        glm::mat4 bloodMatrix3 = glm::mat4(1.0f);
+        bloodMatrix3 = glm::translate(bloodMatrix3, glm::vec3(0.0f, -9.2f, -52.0f)); // Área derecha
+        bloodMatrix3 = glm::rotate(bloodMatrix3, glm::radians(-30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix3 = glm::scale(bloodMatrix3, glm::vec3(0.4f, 0.1f, 0.3f)); 
+        ourShader.setMat4("model", bloodMatrix3);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 4 - zona central
+        glm::mat4 bloodMatrix4 = glm::mat4(1.0f);
+        bloodMatrix4 = glm::translate(bloodMatrix4, glm::vec3(-4.0f, -9.2f, -35.0f)); // Zona central
+        bloodMatrix4 = glm::rotate(bloodMatrix4, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix4 = glm::scale(bloodMatrix4, glm::vec3(0.5f, 0.1f, 0.3f)); 
+        ourShader.setMat4("model", bloodMatrix4);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 5 - zona posterior de la habitación
+        glm::mat4 bloodMatrix5 = glm::mat4(1.0f);
+        bloodMatrix5 = glm::translate(bloodMatrix5, glm::vec3(-1.0f, -9.2f, -57.0f)); // Zona posterior
+        bloodMatrix5 = glm::rotate(bloodMatrix5, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix5 = glm::scale(bloodMatrix5, glm::vec3(0.3f, 0.1f, 0.2f)); 
+        ourShader.setMat4("model", bloodMatrix5);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 6 - zona frontal izquierda
+        glm::mat4 bloodMatrix6 = glm::mat4(1.0f);
+        bloodMatrix6 = glm::translate(bloodMatrix6, glm::vec3(-9.0f, -9.2f, -30.0f)); // Zona frontal izquierda
+        bloodMatrix6 = glm::rotate(bloodMatrix6, glm::radians(135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix6 = glm::scale(bloodMatrix6, glm::vec3(0.4f, 0.1f, 0.1f)); 
+        ourShader.setMat4("model", bloodMatrix6);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 7 - zona frontal derecha
+        glm::mat4 bloodMatrix7 = glm::mat4(1.0f);
+        bloodMatrix7 = glm::translate(bloodMatrix7, glm::vec3(2.0f, -9.2f, -28.0f)); // Zona frontal derecha
+        bloodMatrix7 = glm::rotate(bloodMatrix7, glm::radians(-60.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix7 = glm::scale(bloodMatrix7, glm::vec3(0.3f, 0.1f, 0.1f)); 
+        ourShader.setMat4("model", bloodMatrix7);
+        bloodModel.Draw(ourShader);
+
+        // Charco de sangre 8 - en el pasillo
+        glm::mat4 bloodMatrix8 = glm::mat4(1.0f);
+        bloodMatrix8 = glm::translate(bloodMatrix8, glm::vec3(8.0f, -9.2f, -49.0f)); // Zona del pasillo
+        bloodMatrix8 = glm::rotate(bloodMatrix8, glm::radians(30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        bloodMatrix8 = glm::scale(bloodMatrix8, glm::vec3(0.3f, 0.1f, 0.2f)); 
+        ourShader.setMat4("model", bloodMatrix8);
+        bloodModel.Draw(ourShader);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
