@@ -24,16 +24,7 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 void processInput(GLFWwindow* window);
 bool isPlayerInAllowedZone(glm::vec3 position, const std::vector<glm::vec4>& zones);
-bool isPlayerNearSkull(glm::vec3 playerPos, glm::vec3 skullPos, float radius = 2.0f);
-void checkSkullCollisions(glm::vec3 playerPos);
-void checkSlendermanDamage(glm::vec3 playerPos, glm::vec3 slendermanPos, float currentTime);
-void displayGameOver();
-void resetGame();
-void renderGameOverScreen(Shader& shader, glm::mat4 projection, glm::mat4 view);
-void renderGameOverText(Shader& shader, glm::mat4 projection, glm::mat4 view);
-void renderGameOverOverlay(Shader& shader, unsigned int gameOverTexture);
-unsigned int loadTexture(char const * path);
-void setupGameOverQuad();
+// glm::vec3 performWallRaycast(glm::vec3 origin, glm::vec3 direction, float maxDistance);
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -55,14 +46,14 @@ std::vector<glm::vec4> walkableZones = {
     glm::vec4(11.52f, 15.73f, -46.01f, -43.4f),
     glm::vec4(13.14f, 15.73f, -43.4f, -41.90f),
     glm::vec4(5.18f, 15.74f, -43.2f, -34.72f),
-	// Zona 4: Tercer segmento del pasillo (ejemplo si dobla a la derecha)
+    // Zona 4: Tercer segmento del pasillo (ejemplo si dobla a la derecha)
     glm::vec4(9.35f, 12.14f, -54.13f, -51.47f),
     glm::vec4(9.43f, 11.89f, -51.92f, -50.70f),
     glm::vec4(11.84f, 15.92f, -54.13f, -51.47f),
     glm::vec4(13.48f, 15.94f, -55.23f, -53.70f),
     glm::vec4(5.05f, 15.81f, -60.53f, -55.18f),
     glm::vec4(5.05f, 7.26f, -55.53f, -55.83f)
-    
+
 };
 
 // timing
@@ -71,22 +62,6 @@ float lastFrame = 0.0f;
 
 // flashlight
 bool flashlightOn = false;
-float flashlightBattery = 5.0f; // Duración de la linterna en segundos
-const float maxBattery = 5.0f;
-const float batteryRecharge = 5.0f; // Segundos que se añaden al pisar calavera
-bool flashlightBatteryEmpty = false;
-
-// skull collision detection
-std::vector<bool> skullCollected(7, false); // Para rastrear qué calaveras ya fueron pisadas
-
-// player life system
-int playerLives = 3; // Vidas del jugador
-bool gameOver = false;
-bool showGameOverScreen = false;
-float gameOverTime = 0.0f;
-float lastDamageTime = 0.0f; // Para evitar pérdida múltiple de vidas muy rápido
-const float damageInterval = 2.0f; // Tiempo mínimo entre daños (segundos)
-const float dangerDistance = 3.0f; // Distancia a la que Slenderman causa daño
 
 // slenderman variables
 glm::vec3 slendermanPosition = glm::vec3(0.0f, -7.5f, -30.0f); // Posicionado dentro de la habitación
@@ -95,9 +70,10 @@ float slendermanDirection = 0.0f;
 float slendermanMovementTimer = 0.0f;
 bool slendermanIsIlluminated = false; // Estado de iluminación de Slenderman
 
-// Game Over overlay variables
-unsigned int gameOverVAO, gameOverVBO;
-unsigned int gameOverTexture;
+// raycast variables - Variables para el sistema de detección de colisiones por rayos (DESACTIVADO)
+// glm::vec3 raycastHitPoint = glm::vec3(0.0f);    // Punto donde el rayo golpea una pared/objeto
+// bool raycastHit = false;                        // Indica si el rayo ha golpeado algo
+// float raycastMaxDistance = 10.0f;               // Distancia máxima del rayo para detección
 
 int main()
 {
@@ -108,7 +84,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-#ifdef __APPLE__
+#ifdef _APPLE_
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
@@ -149,22 +125,58 @@ int main()
     // -------------------------
     Shader ourShader("shaders/shader.vs", "shaders/shader.fs");
     Shader slendermanShader("shaders/slenderman.vs", "shaders/slenderman.fs");
-    Shader overlayShader("shaders/overlay.vs", "shaders/overlay.fs");
     //Shader emissiveShader("shaders/luzemissive.vs", "shaders/luzemissive.fs");
     // load models
     // -----------
     Model ourModel("model/partyroom/partyroom.obj");
     Model slendermanModel("model/slenderman/slenderman.obj");
-    Model skullModel("model/skull/skull.obj");
-    Model bloodModel("model/blood/blood.obj");
+    // Cargar shaders para los espejos
+    Shader mirrorShader("shaders/mirror.vs", "shaders/mirror.fs");
 
-    // Configurar quad para Game Over overlay
-    setupGameOverQuad();
-    
-    // Cargar textura de Game Over (puedes cambiar la ruta por tu PNG)
-    // Si no tienes un PNG personalizado, puedes usar una de las texturas existentes temporalmente
-    gameOverTexture = loadTexture("textures/over.png"); // Cambiar por tu archivo PNG
-    // Alternativa: gameOverTexture = loadTexture("textures/container.jpg"); // Usar textura existente como ejemplo
+    // Cargar modelos de espejos
+    Model mirrorModel("model/espejo/espejo.obj");
+    Model mirrorModel1("model/espejo1/espejo.obj");
+    Model mirrorModel2("model/espejo2/espejo3.obj");
+
+    // Estructura para almacenar posición, rotación y modelo de cada espejo
+    struct MirrorData {
+        glm::vec3 position;
+        float rotation;
+        int modelType; // 0 = espejo, 1 = espejo1, 2 = espejo2
+    };
+
+    // Espejos colocados en coordenadas específicas obtenidas del sistema de raycast
+    // NOTA: Estas coordenadas se obtuvieron usando el sistema de raycast para encontrar
+    // las posiciones exactas de las paredes donde colocar los espejos
+    // Rotaciones ajustadas según la orientación de las zonas caminables para que la superficie reflectante mire hacia el interior
+    std::vector<MirrorData> mirrors = {
+        // Zona 2: Primer segmento del pasillo (4.52f, 12.25f, -51.10f, -46.88f) - pasillo horizontal
+        {glm::vec3(12.297f, -7.5f, -49.1318f), 180.0f, 0},    // Espejo 1 - pared derecha, mira hacia la izquierda    // Espejo 2 - pared superior, mira hacia abajo
+        {glm::vec3(6.26015f, -8.75f, -46.835f), 180.0f, 2},      // Espejo 3 - pared superior, mira hacia abajo
+        {glm::vec3(6.29512f, -7.5f, -51.1213f), 270.0f, 0},   // Espejo 4 - pared inferior, mira hacia arriba  // Espejo 5 - pared derecha, mira hacia la izquierda
+
+        // Zona 4: Tercer segmento del pasillo (11.84f, 15.92f, -54.13f, -51.47f) - pasillo horizontal
+        {glm::vec3(10.3214f, -8.75f, -54.1734f), 0.0f, 2},   // Espejo 6 - pared inferior, mira hacia arriba
+        {glm::vec3(9.31519f, -7.5f, -52.265f), 0.0f, 0},    // Espejo 7 - pared izquierda, mira hacia la derecha
+        {glm::vec3(15.949f, -7.75f, -53.1732f), 270.0f, 1},     // Espejo 8 - pared derecha, mira hacia la izquierda
+
+        // Zona: (13.48f, 15.94f, -55.23f, -53.70f) y (5.05f, 15.81f, -60.53f, -55.18f) - pasillos horizontales
+        {glm::vec3(15.8235f, -8.75f, -57.1734f), 270.0f, 2},    // Espejo 9 - pared derecha, mira hacia la izquierda
+        {glm::vec3(14.7786f, -7.5f, -60.5661f), 270.0f, 0},   // Espejo 10 - pared inferior, mira hacia arriba
+        {glm::vec3(5.78436f, -7.75f, -60.5531f), 360.0f, 1},   // Espejo 11 - pared inferior, mira hacia arriba
+        {glm::vec3(5.02137f, -8.75f, -57.678f), 90.0f, 2},    // Espejo 12 - pared izquierda, mira hacia la derecha
+
+        // Zona 3: Segundo segmento del pasillo (9.06f, 11.70f, -47.15f, -43.56f) - pasillo horizontal
+        {glm::vec3(10.8152f, -7.5f, -43.5293f), 90.0f, 0},     // Espejo 13 - pared superior, mira hacia abajo
+        {glm::vec3(14.6936f, -7.75f, -46.0318f), 360.0f, 1},   // Espejo 14 - pared inferior, mira hacia arriba
+        {glm::vec3(15.7578f, -8.75f, -45.0963f), 270.0f, 2},    // Espejo 15 - pared derecha, mira hacia la izquierda
+
+        // Zona: (5.18f, 15.74f, -43.2f, -34.72f) - pasillo vertical largo
+        {glm::vec3(15.90f, -7.5f, -36.7161f), 180.0f, 0},     // Espejo 16 - pared derecha, mira hacia la izquierda
+        {glm::vec3(14.339f, -7.75f, -34.6716f), 180.0f, 1},      // Espejo 17 - pared superior, mira hacia abajo
+        {glm::vec3(5.15202f, -8.75f, -36.4961f), 90.0f, 2},   // Espejo 18 - pared izquierda, mira hacia la derecha
+        {glm::vec3(5.13132f, -7.80f, -41.491f), 360.0f, 0}     // Espejo 19 - pared izquierda, mira hacia la derecha
+    };
 
 
     // draw in wireframe
@@ -181,109 +193,36 @@ int main()
         lastFrame = currentFrame;
         processInput(window);
 
-        // Actualizar batería de la linterna
-        if (flashlightOn && flashlightBattery > 0.0f) {
-            flashlightBattery -= deltaTime;
-            if (flashlightBattery <= 0.0f) {
-                flashlightBattery = 0.0f;
-                flashlightBatteryEmpty = true;
-                flashlightOn = false; // Apagar linterna cuando se agote la batería
-            }
-        }
-
-        // Verificar colisiones con calaveras para recargar batería
-        checkSkullCollisions(camera.Position);
-
-        // Verificar si Slenderman causa daño al jugador
-        if (!gameOver) {
-            checkSlendermanDamage(camera.Position, slendermanPosition, currentFrame);
-        }
-
-        // Si el juego terminó, mostrar game over y salir del loop
-        if (gameOver && !showGameOverScreen) {
-            showGameOverScreen = true;
-            gameOverTime = currentFrame;
-            displayGameOver();
-        }
-
-        // Mostrar vidas en consola cada 10 segundos (opcional para debug)
-        static float lastLifeDisplay = 0.0f;
-        if (currentFrame - lastLifeDisplay > 10.0f) {
-            std::cout << "Vidas actuales: " << playerLives << " | Batería: " << flashlightBattery << "s" << std::endl;
-            lastLifeDisplay = currentFrame;
-        }
+        // SISTEMA DE RAYCAST - Detecta paredes/objetos del mundo (DESACTIVADO)
+        // Realizar raycast desde la posición de la cámara en la dirección que mira
+        // para encontrar el punto exacto donde hay una pared u objeto
+        // raycastHitPoint = performWallRaycast(camera.Position, camera.Front, raycastMaxDistance);
+        // raycastHit = true;  // Siempre marcamos como hit porque siempre encontramos algo
 
         // Actualizar movimiento de Slenderman para perseguir al jugador
         slendermanMovementTimer += deltaTime;
 
-        // Calcular si Slenderman está siendo iluminado por la linternas
-        slendermanIsIlluminated = false;
-        if (flashlightOn && flashlightBattery > 0.0f) {
-            // Calcular vector de la cámara hacia Slenderman
-            glm::vec3 directionToSlenderman = glm::normalize(slendermanPosition - camera.Position);
-
-            // Calcular el ángulo entre la dirección de la cámara y la dirección hacia Slenderman
-            float dotProduct = glm::dot(camera.Front, directionToSlenderman);
-            float angleCos = dotProduct;
-
-            // Verificar si Slenderman está dentro del cono de la linterna
-            float flashlightAngle = glm::cos(glm::radians(25.0f)); // Ángulo exterior de la linterna
-            float distanceToSlenderman = glm::length(slendermanPosition - camera.Position);
-
-            // Slenderman está iluminado si está dentro del cono y a una distancia razonable
-            if (angleCos > flashlightAngle && distanceToSlenderman < 50.0f) {
-                slendermanIsIlluminated = true;
-            }
+        // Cambiar dirección cada 3-5 segundos de forma aleatoria
+        if (slendermanMovementTimer > 3.0f + (sin(currentFrame * 0.3f) * 2.0f)) {
+            slendermanDirection += glm::radians(45.0f + (sin(currentFrame * 0.7f) * 90.0f));
+            slendermanMovementTimer = 0.0f;
         }
 
-        // Solo perseguir si NO está siendo iluminado
-        if (!slendermanIsIlluminated) {
-            // Calcular la dirección hacia la cámara (jugador)
-            glm::vec3 directionToPlayer = camera.Position - slendermanPosition;
-            directionToPlayer.y = 0.0f; // Solo movimiento horizontal
+        // Calcular nueva posición de Slenderman
+        float moveX = sin(slendermanDirection) * slendermanSpeed * deltaTime;
+        float moveZ = cos(slendermanDirection) * slendermanSpeed * deltaTime;
+        glm::vec3 newPosition = slendermanPosition;
+        newPosition.x += moveX;
+        newPosition.z += moveZ;
 
-            // Calcular la distancia al jugador
-            float distanceToPlayer = glm::length(directionToPlayer);
-
-            // Si está muy cerca, moverse más lento para crear tensión
-            float currentSpeed = slendermanSpeed;
-            if (distanceToPlayer < 5.0f) {
-                currentSpeed = slendermanSpeed * 0.3f; // Más lento cuando está cerca
-            }
-            else if (distanceToPlayer > 20.0f) {
-                currentSpeed = slendermanSpeed * 1.5f; // Más rápido cuando está lejos
-            }
-
-            // Normalizar la dirección y calcular el ángulo
-            if (distanceToPlayer > 0.1f) { // Evitar división por cero
-                directionToPlayer = glm::normalize(directionToPlayer);
-                slendermanDirection = atan2(directionToPlayer.x, directionToPlayer.z);
-
-                // Agregar un poco de movimiento errático ocasionalmente
-                if (slendermanMovementTimer > 2.0f + (sin(currentFrame * 0.5f) * 1.0f)) {
-                    slendermanDirection += glm::radians((sin(currentFrame * 1.2f) * 30.0f)); // Movimiento errático sutil
-                    slendermanMovementTimer = 0.0f;
-                }
-            }
-
-            // Calcular nueva posición de Slenderman
-            float moveX = sin(slendermanDirection) * currentSpeed * deltaTime;
-            float moveZ = cos(slendermanDirection) * currentSpeed * deltaTime;
-            glm::vec3 newPosition = slendermanPosition;
-            newPosition.x += moveX;
-            newPosition.z += moveZ;
-
-            // Mantener Slenderman dentro de los límites de la habitación
-            float roomMinX = -15.0f;
-            float roomMaxX = 15.0f;
-            float roomMinZ = -45.0f;
-            float roomMaxZ = -15.0f;
-
-            if (newPosition.x >= roomMinX && newPosition.x <= roomMaxX &&
-                newPosition.z >= roomMinZ && newPosition.z <= roomMaxZ) {
-                slendermanPosition.x = newPosition.x;
-                slendermanPosition.z = newPosition.z;
-            }
+        // Mantener Slenderman dentro de los límites de la habitación
+        // Límites basados en las dimensiones del party room
+        if (isPlayerInAllowedZone(newPosition, walkableZones)) {
+            slendermanPosition = newPosition; // Actualizar posición solo si está dentro de las zonas permitidas
+        }
+        else {
+            // Si se sale de los límites, cambiar dirección
+            slendermanDirection += glm::radians(180.0f);
         }
         // Si está iluminado, Slenderman se queda inmóvil (no actualizar posición)
 
@@ -291,13 +230,7 @@ int main()
         slendermanPosition.y = -7.5f;
 
         camera.Position.y = -7.5f; // Mantener la cámara a una altura fija
-        
-        // Si estamos en game over, usar un fondo menos oscuro
-        if (showGameOverScreen) {
-            glClearColor(0.1f, 0.0f, 0.0f, 1.0f); // Fondo rojo muy oscuro pero no negro
-        } else {
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Fondo negro normal
-        }
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Si estamos en game over, mostrar pantalla especial con modelos 3D
@@ -496,12 +429,12 @@ int main()
         ourShader.setFloat("light.quadratic", 0.0075f);
 
         // Configuración de la linterna (más brillante para contraste)
-        ourShader.setBool("flashlightOn", flashlightOn && flashlightBattery > 0.0f);
-        if (flashlightOn && flashlightBattery > 0.0f) {
+        ourShader.setBool("flashlightOn", flashlightOn);
+        if (flashlightOn) {
             ourShader.setVec3("flashlight.position", camera.Position);
             ourShader.setVec3("flashlight.direction", camera.Front);
-            ourShader.setFloat("flashlight.cutOff", glm::cos(glm::radians(8.0f)));
-            ourShader.setFloat("flashlight.outerCutOff", glm::cos(glm::radians(12.0f)));
+            ourShader.setFloat("flashlight.cutOff", glm::cos(glm::radians(15.0f)));
+            ourShader.setFloat("flashlight.outerCutOff", glm::cos(glm::radians(25.0f)));
             ourShader.setVec3("flashlight.ambient", 0.0f, 0.0f, 0.0f);
             ourShader.setVec3("flashlight.diffuse", 1.0f, 1.0f, 0.9f);  // Luz cálida
             ourShader.setVec3("flashlight.specular", 1.0f, 1.0f, 1.0f);
@@ -544,150 +477,59 @@ int main()
         slendermanShader.setMat4("model", slendermanModelMatrix);
         slendermanModel.Draw(slendermanShader);
 
-        // Volver a usar el shader principal para skulls y blood
-        ourShader.use();
+        // Renderizar los espejos
+        for (int i = 0; i < static_cast<int>(mirrors.size()); ++i) {
+            const auto& mirror = mirrors[i];
+            mirrorShader.use();
+            mirrorShader.setMat4("projection", projection);
+            mirrorShader.setMat4("view", view);
+            mirrorShader.setVec3("viewPos", camera.Position);
 
-        // Renderizar skull
-        float flickerIntensity = 0.7f + 0.4f * sin(currentFrame * 8.0f) * cos(currentFrame * 12.0f);
-        float warmFlicker = 0.8f + 0.3f * sin(currentFrame * 6.0f + 1.0f);
+            // Configurar uniforms de la linterna para los espejos
+            mirrorShader.setBool("flashlightOn", flashlightOn);
+            if (flashlightOn) {
+                mirrorShader.setVec3("flashlight.position", camera.Position);
+                mirrorShader.setVec3("flashlight.direction", camera.Front);
+                mirrorShader.setFloat("flashlight.cutOff", glm::cos(glm::radians(15.0f)));
+                mirrorShader.setFloat("flashlight.outerCutOff", glm::cos(glm::radians(25.0f)));
+                mirrorShader.setVec3("flashlight.ambient", 0.0f, 0.0f, 0.0f);
+                mirrorShader.setVec3("flashlight.diffuse", 1.0f, 1.0f, 0.9f);
+                mirrorShader.setVec3("flashlight.specular", 1.0f, 1.0f, 1.0f);
+                mirrorShader.setFloat("flashlight.constant", 1.0f);
+                mirrorShader.setFloat("flashlight.linear", 0.022f);
+                mirrorShader.setFloat("flashlight.quadratic", 0.0019f);
+            }
 
-        // Skull 1 - centro de la habitación principal
-        glm::mat4 skullModelMatrix1 = glm::mat4(1.0f);
-        skullModelMatrix1 = glm::translate(skullModelMatrix1, glm::vec3(-4.0f, -9.3f, -39.0f)); // Centro de la habitación
-        skullModelMatrix1 = glm::rotate(skullModelMatrix1, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix1 = glm::scale(skullModelMatrix1, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix1);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+            glm::mat4 mirrorModelMatrix = glm::mat4(1.0f);
+            mirrorModelMatrix = glm::translate(mirrorModelMatrix, mirror.position);
+            mirrorModelMatrix = glm::rotate(mirrorModelMatrix, glm::radians(mirror.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
+            mirrorModelMatrix = glm::scale(mirrorModelMatrix, glm::vec3(1.2f, 1.2f, 1.2f)); // Espejos más grandes (era 0.5f)
+            mirrorShader.setMat4("model", mirrorModelMatrix);
 
-        // Skull 2 - esquina izquierda de la habitación
-        glm::mat4 skullModelMatrix2 = glm::mat4(1.0f);
-        skullModelMatrix2 = glm::translate(skullModelMatrix2, glm::vec3(-10.0f, -9.3f, -45.0f)); // Esquina izquierda
-        skullModelMatrix2 = glm::rotate(skullModelMatrix2, glm::radians(120.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix2 = glm::scale(skullModelMatrix2, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix2);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
+            // Seleccionar el modelo según el tipo
+            switch (mirror.modelType) {
+            case 0:
+                mirrorModel.Draw(mirrorShader);
+                break;
+            case 1:
+                mirrorModel1.Draw(mirrorShader);
+                break;
+            case 2:
+                mirrorModel2.Draw(mirrorShader);
+                break;
+            }
+        }
 
-        // Skull 3 - esquina derecha de la habitación
-        glm::mat4 skullModelMatrix3 = glm::mat4(1.0f);
-        skullModelMatrix3 = glm::translate(skullModelMatrix3, glm::vec3(2.0f, -9.3f, -50.0f)); // Esquina derecha
-        skullModelMatrix3 = glm::rotate(skullModelMatrix3, glm::radians(-60.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix3 = glm::scale(skullModelMatrix3, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix3);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
-
-        // Skull 4 - zona central-frontal de la habitación
-        glm::mat4 skullModelMatrix4 = glm::mat4(1.0f);
-        skullModelMatrix4 = glm::translate(skullModelMatrix4, glm::vec3(-6.0f, -9.3f, -25.0f)); // Zona frontal
-        skullModelMatrix4 = glm::rotate(skullModelMatrix4, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix4 = glm::scale(skullModelMatrix4, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix4);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
-
-        // Skull 5 - zona posterior de la habitación
-        glm::mat4 skullModelMatrix5 = glm::mat4(1.0f);
-        skullModelMatrix5 = glm::translate(skullModelMatrix5, glm::vec3(1.0f, -9.3f, -55.0f)); // Zona posterior
-        skullModelMatrix5 = glm::rotate(skullModelMatrix5, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix5 = glm::scale(skullModelMatrix5, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix5);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
-
-        // Skull 6 - zona lateral izquierda
-        glm::mat4 skullModelMatrix6 = glm::mat4(1.0f);
-        skullModelMatrix6 = glm::translate(skullModelMatrix6, glm::vec3(-8.0f, -9.3f, -33.0f)); // Lateral izquierda
-        skullModelMatrix6 = glm::rotate(skullModelMatrix6, glm::radians(270.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix6 = glm::scale(skullModelMatrix6, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix6);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
-
-        // Skull 7 - zona lateral derecha
-        glm::mat4 skullModelMatrix7 = glm::mat4(1.0f);
-        skullModelMatrix7 = glm::translate(skullModelMatrix7, glm::vec3(0.0f, -9.3f, -30.0f)); // Lateral derecha
-        skullModelMatrix7 = glm::rotate(skullModelMatrix7, glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f)); 
-        skullModelMatrix7 = glm::scale(skullModelMatrix7, glm::vec3(1.8f, 1.8f, 1.8f)); 
-        ourShader.setMat4("model", skullModelMatrix7);
-        ourShader.setBool("hasEmissiveMap", false);
-        skullModel.Draw(ourShader);
-
-        // Renderizar múltiples charcos de sangre por el escenario
-        // Configurar luz ambiente tenue para la sangre
-        ourShader.setVec3("light.position", 0.0f, -5.0f, -28.0f);
-        ourShader.setVec3("light.ambient", 0.1f, 0.02f, 0.02f); // Luz rojiza tenue
-        ourShader.setVec3("light.diffuse", 0.3f, 0.05f, 0.05f);
-        ourShader.setVec3("light.specular", 0.2f, 0.02f, 0.02f);
-        ourShader.setFloat("light.constant", 1.0f);
-        ourShader.setFloat("light.linear", 0.09f);
-        ourShader.setFloat("light.quadratic", 0.032f);
-        ourShader.setBool("hasEmissiveMap", false); // La sangre no brilla
-
-        // Charco de sangre 1 - cerca del skull central
-        glm::mat4 bloodMatrix1 = glm::mat4(1.0f);
-        bloodMatrix1 = glm::translate(bloodMatrix1, glm::vec3(-2.0f, -9.2f, -40.0f)); // Cerca del skull central
-        bloodMatrix1 = glm::rotate(bloodMatrix1, glm::radians(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix1 = glm::scale(bloodMatrix1, glm::vec3(0.4f, 0.1f, 0.4f)); 
-        ourShader.setMat4("model", bloodMatrix1);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 2 - esquina izquierda de la habitación
-        glm::mat4 bloodMatrix2 = glm::mat4(1.0f);
-        bloodMatrix2 = glm::translate(bloodMatrix2, glm::vec3(-8.0f, -9.2f, -47.0f)); // Esquina izquierda
-        bloodMatrix2 = glm::rotate(bloodMatrix2, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix2 = glm::scale(bloodMatrix2, glm::vec3(0.3f, 0.1f, 0.5f)); 
-        ourShader.setMat4("model", bloodMatrix2);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 3 - cerca del área derecha
-        glm::mat4 bloodMatrix3 = glm::mat4(1.0f);
-        bloodMatrix3 = glm::translate(bloodMatrix3, glm::vec3(0.0f, -9.2f, -52.0f)); // Área derecha
-        bloodMatrix3 = glm::rotate(bloodMatrix3, glm::radians(-30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix3 = glm::scale(bloodMatrix3, glm::vec3(0.4f, 0.1f, 0.3f)); 
-        ourShader.setMat4("model", bloodMatrix3);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 4 - zona central
-        glm::mat4 bloodMatrix4 = glm::mat4(1.0f);
-        bloodMatrix4 = glm::translate(bloodMatrix4, glm::vec3(-4.0f, -9.2f, -35.0f)); // Zona central
-        bloodMatrix4 = glm::rotate(bloodMatrix4, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix4 = glm::scale(bloodMatrix4, glm::vec3(0.5f, 0.1f, 0.3f)); 
-        ourShader.setMat4("model", bloodMatrix4);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 5 - zona posterior de la habitación
-        glm::mat4 bloodMatrix5 = glm::mat4(1.0f);
-        bloodMatrix5 = glm::translate(bloodMatrix5, glm::vec3(-1.0f, -9.2f, -57.0f)); // Zona posterior
-        bloodMatrix5 = glm::rotate(bloodMatrix5, glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix5 = glm::scale(bloodMatrix5, glm::vec3(0.3f, 0.1f, 0.2f)); 
-        ourShader.setMat4("model", bloodMatrix5);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 6 - zona frontal izquierda
-        glm::mat4 bloodMatrix6 = glm::mat4(1.0f);
-        bloodMatrix6 = glm::translate(bloodMatrix6, glm::vec3(-9.0f, -9.2f, -30.0f)); // Zona frontal izquierda
-        bloodMatrix6 = glm::rotate(bloodMatrix6, glm::radians(135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix6 = glm::scale(bloodMatrix6, glm::vec3(0.4f, 0.1f, 0.1f)); 
-        ourShader.setMat4("model", bloodMatrix6);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 7 - zona frontal derecha
-        glm::mat4 bloodMatrix7 = glm::mat4(1.0f);
-        bloodMatrix7 = glm::translate(bloodMatrix7, glm::vec3(2.0f, -9.2f, -28.0f)); // Zona frontal derecha
-        bloodMatrix7 = glm::rotate(bloodMatrix7, glm::radians(-60.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix7 = glm::scale(bloodMatrix7, glm::vec3(0.3f, 0.1f, 0.1f)); 
-        ourShader.setMat4("model", bloodMatrix7);
-        bloodModel.Draw(ourShader);
-
-        // Charco de sangre 8 - en el pasillo
-        glm::mat4 bloodMatrix8 = glm::mat4(1.0f);
-        bloodMatrix8 = glm::translate(bloodMatrix8, glm::vec3(8.0f, -9.2f, -49.0f)); // Zona del pasillo
-        bloodMatrix8 = glm::rotate(bloodMatrix8, glm::radians(30.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-        bloodMatrix8 = glm::scale(bloodMatrix8, glm::vec3(0.3f, 0.1f, 0.2f)); 
-        ourShader.setMat4("model", bloodMatrix8);
-        bloodModel.Draw(ourShader);
+        // SISTEMA DE DEBUG PARA RAYCAST (DESACTIVADO)
+        // Mostrar coordenadas de donde apunta el jugador en tiempo real
+        // Presiona TAB para ver las coordenadas de la pared/objeto al que apuntas
+        /*
+        if (glfwGetKey(window, GLFW_KEY_TAB) == GLFW_PRESS) {
+            std::cout << "Pared/Objeto en: X=" << raycastHitPoint.x
+                      << ", Y=" << raycastHitPoint.y
+                      << ", Z=" << raycastHitPoint.z << std::endl;
+        }
+        */
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -713,334 +555,12 @@ bool isPlayerInAllowedZone(glm::vec3 position, const std::vector<glm::vec4>& zon
     return false;
 }
 
-// Función para detectar si el jugador está cerca de una calavera
-bool isPlayerNearSkull(glm::vec3 playerPos, glm::vec3 skullPos, float radius) {
-    float distance = glm::length(playerPos - skullPos);
-    return distance <= radius;
-}
-
-// Función para verificar colisiones con todas las calaveras
-void checkSkullCollisions(glm::vec3 playerPos) {
-    // Posiciones de las calaveras (deben coincidir con las del render)
-    std::vector<glm::vec3> skullPositions = {
-        glm::vec3(-4.0f, -9.3f, -39.0f),  // Skull 1
-        glm::vec3(-10.0f, -9.3f, -45.0f), // Skull 2
-        glm::vec3(2.0f, -9.3f, -50.0f),   // Skull 3
-        glm::vec3(-6.0f, -9.3f, -25.0f),  // Skull 4
-        glm::vec3(1.0f, -9.3f, -55.0f),   // Skull 5
-        glm::vec3(-8.0f, -9.3f, -33.0f),  // Skull 6
-        glm::vec3(0.0f, -9.3f, -30.0f)    // Skull 7
-    };
-
-    for (int i = 0; i < skullPositions.size(); i++) {
-        if (!skullCollected[i] && isPlayerNearSkull(playerPos, skullPositions[i], 2.0f)) {
-            // Jugador pisó una calavera nueva
-            skullCollected[i] = true;
-            flashlightBattery = std::min(flashlightBattery + batteryRecharge, maxBattery);
-            flashlightBatteryEmpty = false;
-            
-            // Opcional: Imprimir mensaje en consola para debug
-            std::cout << "¡Calavera " << (i + 1) << " pisada! Batería recargada: " << flashlightBattery << "s" << std::endl;
-            break; // Solo una calavera por frame
-        }
-    }
-}
-
-// Función para verificar si Slenderman causa daño al jugador
-void checkSlendermanDamage(glm::vec3 playerPos, glm::vec3 slendermanPos, float currentTime) {
-    float distance = glm::length(playerPos - slendermanPos);
-    
-    // Si Slenderman está muy cerca y ha pasado suficiente tiempo desde el último daño
-    if (distance <= dangerDistance && (currentTime - lastDamageTime) >= damageInterval) {
-        playerLives--;
-        lastDamageTime = currentTime;
-        
-        std::cout << "¡Slenderman te atacó! Vidas restantes: " << playerLives << std::endl;
-        
-        // Verificar si el jugador se quedó sin vidas
-        if (playerLives <= 0) {
-            gameOver = true;
-            std::cout << "GAME OVER - Te quedaste sin vidas!" << std::endl;
-        }
-    }
-}
-
-// Función para mostrar game over
-void displayGameOver() {
-    std::cout << "===============================================" << std::endl;
-    std::cout << "                 GAME OVER                    " << std::endl;
-    std::cout << "        Slenderman te ha vencido...           " << std::endl;
-    std::cout << "===============================================" << std::endl;
-    std::cout << "Presiona R para reiniciar el juego" << std::endl;
-    std::cout << "Presiona ESC para salir del juego" << std::endl;
-}
-
-// Función para reiniciar el juego
-void resetGame() {
-    // Reiniciar todas las variables del juego
-    playerLives = 3;
-    gameOver = false;
-    showGameOverScreen = false;
-    gameOverTime = 0.0f;
-    lastDamageTime = 0.0f;
-    
-    // Reiniciar batería de linterna
-    flashlightBattery = 5.0f;
-    flashlightOn = false;
-    flashlightBatteryEmpty = false;
-    
-    // Reiniciar calaveras
-    for (int i = 0; i < skullCollected.size(); i++) {
-        skullCollected[i] = false;
-    }
-    
-    // Reiniciar posición del jugador
-    camera.Position = glm::vec3(0.0f, -7.5f, -32.0f);
-    
-    // Reiniciar Slenderman
-    slendermanPosition = glm::vec3(0.0f, -7.5f, -30.0f);
-    slendermanDirection = 0.0f;
-    slendermanMovementTimer = 0.0f;
-    slendermanIsIlluminated = false;
-    
-    std::cout << "¡Juego reiniciado! Buena suerte..." << std::endl;
-}
-
-// Función para configurar la iluminación de Game Over
-void renderGameOverScreen(Shader& shader, glm::mat4 projection, glm::mat4 view) {
-    shader.setMat4("projection", projection);
-    shader.setMat4("view", view);
-    shader.setVec3("viewPos", camera.Position);
-    shader.setFloat("material.shininess", 16.0f);
-    
-    float currentTime = glfwGetTime();
-    float flickerEffect = 0.8f + 0.2f * sin(currentTime * 3.0f);
-    float pulseEffect = 0.7f + 0.3f * sin(currentTime * 2.0f);
-    
-    // Configurar iluminación más brillante y dramática para Game Over
-    shader.setVec3("light.position", 0.0f, 5.0f, -25.0f);
-    shader.setVec3("light.ambient", 0.6f * flickerEffect, 0.1f, 0.1f); // Más luz ambiente
-    shader.setVec3("light.diffuse", 1.5f * flickerEffect, 0.3f, 0.3f); // Mucho más brillante
-    shader.setVec3("light.specular", 1.2f, 0.4f, 0.4f);
-    shader.setFloat("light.constant", 1.0f);
-    shader.setFloat("light.linear", 0.022f); // Menor atenuación para más alcance
-    shader.setFloat("light.quadratic", 0.0019f);
-    
-    // Añadir una segunda luz desde arriba para mejor visibilidad
-    shader.setVec3("light2.position", 0.0f, 10.0f, -35.0f);
-    shader.setVec3("light2.ambient", 0.4f * pulseEffect, 0.05f, 0.05f);
-    shader.setVec3("light2.diffuse", 1.0f * pulseEffect, 0.2f, 0.2f);
-    shader.setVec3("light2.specular", 0.8f, 0.3f, 0.3f);
-    shader.setFloat("light2.constant", 1.0f);
-    shader.setFloat("light2.linear", 0.045f);
-    shader.setFloat("light2.quadratic", 0.0075f);
-    
-    // Desactivar linterna durante Game Over
-    shader.setBool("flashlightOn", false);
-    shader.setFloat("time", currentTime);
-    shader.setBool("hasEmissiveMap", false);
-}
-
-// Función para renderizar texto de Game Over usando modelos 3D
-void renderGameOverText(Shader& shader, glm::mat4 projection, glm::mat4 view) {
-    float currentTime = glfwGetTime();
-    float textPulse = 0.8f + 0.4f * sin(currentTime * 2.0f);
-    float letterFloat = 0.5f * sin(currentTime * 1.5f);
-    
-    // Configurar iluminación especial para el texto
-    shader.setVec3("light.position", 0.0f, 0.0f, -20.0f);
-    shader.setVec3("light.ambient", 1.0f * textPulse, 0.2f, 0.2f);
-    shader.setVec3("light.diffuse", 2.0f * textPulse, 0.3f, 0.3f);
-    shader.setVec3("light.specular", 1.5f, 0.4f, 0.4f);
-    
-    // Posiciones para las letras "GAME OVER" usando calaveras
-    std::vector<glm::vec3> gamePositions = {
-        glm::vec3(-15.0f, -3.0f, -25.0f), // G
-        glm::vec3(-11.0f, -3.0f, -25.0f), // A
-        glm::vec3(-7.0f, -3.0f, -25.0f),  // M
-        glm::vec3(-3.0f, -3.0f, -25.0f)   // E
-    };
-    
-    std::vector<glm::vec3> overPositions = {
-        glm::vec3(3.0f, -3.0f, -25.0f),   // O
-        glm::vec3(7.0f, -3.0f, -25.0f),   // V
-        glm::vec3(11.0f, -3.0f, -25.0f),  // E
-        glm::vec3(15.0f, -3.0f, -25.0f)   // R
-    };
-    
-    // Renderizar "GAME" 
-    for (int i = 0; i < gamePositions.size(); i++) {
-        glm::mat4 letterMatrix = glm::mat4(1.0f);
-        float individualFloat = letterFloat + sin(currentTime * 2.0f + i * 0.5f) * 0.3f;
-        letterMatrix = glm::translate(letterMatrix, gamePositions[i] + glm::vec3(0.0f, individualFloat, 0.0f));
-        
-        // Rotación individual para cada letra
-        float rotation = currentTime * 30.0f + i * 45.0f;
-        letterMatrix = glm::rotate(letterMatrix, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-        
-        // Escalado pulsante más grande para las letras
-        float letterScale = 3.0f + 1.0f * sin(currentTime * 3.0f + i * 0.8f);
-        letterMatrix = glm::scale(letterMatrix, glm::vec3(letterScale, letterScale, letterScale));
-        
-        shader.setMat4("model", letterMatrix);
-    }
-    
-    // Renderizar "OVER"
-    for (int i = 0; i < overPositions.size(); i++) {
-        glm::mat4 letterMatrix = glm::mat4(1.0f);
-        float individualFloat = letterFloat + sin(currentTime * 2.0f + (i + 4) * 0.5f) * 0.3f;
-        letterMatrix = glm::translate(letterMatrix, overPositions[i] + glm::vec3(0.0f, individualFloat, 0.0f));
-        
-        // Rotación individual para cada letra
-        float rotation = currentTime * 30.0f + (i + 4) * 45.0f;
-        letterMatrix = glm::rotate(letterMatrix, glm::radians(rotation), glm::vec3(0.0f, 1.0f, 0.0f));
-        
-        // Escalado pulsante más grande para las letras
-        float letterScale = 3.0f + 1.0f * sin(currentTime * 3.0f + (i + 4) * 0.8f);
-        letterMatrix = glm::scale(letterMatrix, glm::vec3(letterScale, letterScale, letterScale));
-        
-        shader.setMat4("model", letterMatrix);
-    }
-    
-    // Texto de instrucciones usando charcos de sangre más pequeños
-    std::vector<glm::vec3> instructionPositions = {
-        glm::vec3(-8.0f, -6.0f, -25.0f),   // "Press"
-        glm::vec3(-4.0f, -6.0f, -25.0f),   // "R"
-        glm::vec3(0.0f, -6.0f, -25.0f),    // "to"
-        glm::vec3(4.0f, -6.0f, -25.0f),    // "Restart"
-        glm::vec3(8.0f, -6.0f, -25.0f)     // "..."
-    };
-}
-
-// Función para cargar textura desde archivo
-unsigned int loadTexture(char const * path)
-{
-    unsigned int textureID;
-    glGenTextures(1, &textureID);
-
-    int width, height, nrComponents;
-    unsigned char *data = stbi_load(path, &width, &height, &nrComponents, 0);
-    if (data)
-    {
-        GLenum format;
-        if (nrComponents == 1)
-            format = GL_RED;
-        else if (nrComponents == 3)
-            format = GL_RGB;
-        else if (nrComponents == 4)
-            format = GL_RGBA;
-
-        glBindTexture(GL_TEXTURE_2D, textureID);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        stbi_image_free(data);
-    }
-    else
-    {
-        std::cout << "Texture failed to load at path: " << path << std::endl;
-        stbi_image_free(data);
-    }
-
-    return textureID;
-}
-
-// Función para configurar el quad de pantalla completa
-void setupGameOverQuad() {
-    // Vértices para un quad de pantalla completa en coordenadas normalizadas
-    float quadVertices[] = {
-        // posiciones   // coordenadas de textura (Y invertida para corregir la orientación)
-        -1.0f,  1.0f,  0.0f, 0.0f,
-        -1.0f, -1.0f,  0.0f, 1.0f,
-         1.0f, -1.0f,  1.0f, 1.0f,
-
-        -1.0f,  1.0f,  0.0f, 0.0f,
-         1.0f, -1.0f,  1.0f, 1.0f,
-         1.0f,  1.0f,  1.0f, 0.0f
-    };
-
-    glGenVertexArrays(1, &gameOverVAO);
-    glGenBuffers(1, &gameOverVBO);
-    
-    glBindVertexArray(gameOverVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, gameOverVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-    
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-}
-
-// Función para renderizar overlay de Game Over con PNG
-void renderGameOverOverlay(Shader& shader, unsigned int gameOverTexture) {
-    // Desactivar depth test para renderizar encima de todo
-    glDisable(GL_DEPTH_TEST);
-    
-    // Activar blending para transparencia
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    
-    shader.use();
-    
-    // Configurar matriz de proyección ortográfica para 2D
-    glm::mat4 projection = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, -1.0f, 1.0f);
-    glm::mat4 view = glm::mat4(1.0f);
-    glm::mat4 model = glm::mat4(1.0f);
-    
-    shader.setMat4("projection", projection);
-    shader.setMat4("view", view);
-    shader.setMat4("model", model);
-    
-    // Efecto de fade in/out
-    float currentTime = glfwGetTime();
-    float alpha = 0.7f + 0.3f * sin(currentTime * 2.0f); // Pulsación de transparencia
-    shader.setFloat("alpha", alpha);
-    
-    // Bind texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gameOverTexture);
-    shader.setInt("gameOverTexture", 0);
-    
-    // Render quad
-    glBindVertexArray(gameOverVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-    glBindVertexArray(0);
-    
-    // Reactivar depth test
-    glEnable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-}
-
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
-
-    // Si estamos en game over, solo permitir reinicio
-    if (showGameOverScreen) {
-        static bool rKeyPressed = false;
-        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && !rKeyPressed) {
-            resetGame();
-            rKeyPressed = true;
-        }
-        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE) {
-            rKeyPressed = false;
-        }
-        return;
-    }
-
-    // No permitir movimiento durante game over
-    if (gameOver) {
-        return;
-    }
 
     glm::vec3 oldCameraPos = camera.Position;
 
@@ -1057,13 +577,10 @@ void processInput(GLFWwindow* window)
         // Si se sale, revierte a la posición segura anterior
         camera.Position = oldCameraPos;
     }
-    // Alternar linterna con tecla F (solo si hay batería)
+    // Alternar linterna con tecla F
     static bool fKeyPressed = false;
     if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !fKeyPressed) {
-        if (flashlightBattery > 0.0f) {
-            flashlightOn = !flashlightOn;
-            flashlightBatteryEmpty = false;
-        }
+        flashlightOn = !flashlightOn;
         fKeyPressed = true;
     }
     if (glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE) {
@@ -1112,9 +629,52 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        if (flashlightBattery > 0.0f) {
-            flashlightOn = !flashlightOn;
-            flashlightBatteryEmpty = false;
-        }
+        flashlightOn = !flashlightOn;
     }
+    /*
+    if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
+        // RAYCAST DEBUG: Click derecho para mostrar coordenadas exactas (DESACTIVADO)
+        // Útil para obtener posiciones precisas de paredes/objetos donde colocar elementos
+        std::cout << "Coordenadas de pared/objeto: X=" << raycastHitPoint.x
+                  << ", Y=" << raycastHitPoint.y
+                  << ", Z=" << raycastHitPoint.z << std::endl;
+    }
+    */
 }
+
+/*
+// FUNCIÓN DE RAYCAST - Detecta paredes/objetos del mundo mediante raycasting (DESACTIVADA)
+// Esta función simula un rayo que sale desde el origen en una dirección específica
+// y detecta cuando encuentra una pared (zona no caminable)
+glm::vec3 performWallRaycast(glm::vec3 origin, glm::vec3 direction, float maxDistance)
+{
+    // Normalizar la dirección del rayo para que tenga longitud 1
+    direction = glm::normalize(direction);
+
+    // Configurar el paso pequeño para mayor precisión en la detección
+    // Un paso más pequeño = mayor precisión pero más cálculos
+    float stepSize = 0.05f;
+    float currentDistance = 0.0f;
+
+    // Recorrer el rayo paso a paso hasta encontrar una pared o alcanzar la distancia máxima
+    while (currentDistance < maxDistance) {
+        // Calcular el punto actual en el rayo basado en la distancia recorrida
+        glm::vec3 currentPoint = origin + direction * currentDistance;
+
+        // DETECCIÓN DE COLISIÓN:
+        // Si el punto actual está fuera de las zonas caminables,
+        // significa que hemos encontrado una pared u objeto sólido
+        if (!isPlayerInAllowedZone(currentPoint, walkableZones)) {
+            // ¡ENCONTRAMOS UNA PARED! Devolver las coordenadas exactas del impacto
+            return currentPoint;
+        }
+
+        // Avanzar al siguiente punto del rayo
+        currentDistance += stepSize;
+    }
+
+    // Si llegamos aquí, no encontramos ninguna pared dentro del rango
+    // Devolver el punto final del rayo (máxima distancia alcanzada)
+    return origin + direction * maxDistance;
+}
+*/
